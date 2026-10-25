@@ -1,0 +1,84 @@
+# QA Hub + Kiwi TCMS + MariaDB
+#
+#   docker compose up -d --build     -> Kiwi em https://localhost:8443 e QA Hub em http://localhost:3000
+#
+# Neste PC, quem publica em kiwi.seu-dominio.com e qa.seu-dominio.com é o serviço
+# cloudflared do Windows (os endereços são configurados no painel do Cloudflare).
+# Numa VPS sem esse serviço, use:  docker compose --profile tunnel up -d
+#
+# Só a tag "latest" do Kiwi é pública. Depois do primeiro pull, fixe o digest
+# (docker inspect kiwitcms/kiwi:latest --format '{{index .RepoDigests 0}}')
+# em KIWI_IMAGE no .env para o ambiente não mudar sozinho.
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?defina DB_ROOT_PASSWORD no .env}
+      MYSQL_DATABASE: kiwi
+      MYSQL_USER: kiwi
+      MYSQL_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  web:
+    image: ${KIWI_IMAGE:-kiwitcms/kiwi:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      - uploads:/Kiwi/uploads
+    environment:
+      KIWI_DB_HOST: db
+      KIWI_DB_PORT: 3306
+      KIWI_DB_NAME: kiwi
+      KIWI_DB_USER: kiwi
+      KIWI_DB_PASSWORD: ${DB_PASSWORD}
+
+  # O QA Hub fala com o Kiwi pela rede interna (https://web:8443).
+  # Segredos (SESSION_SECRET, AZURE_DEVOPS_PAT) ficam em web/.env.production.local, fora do git.
+  qa-hub:
+    build: ./web
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./web/.env.production.local
+    volumes:
+      - evidence:/app/.evidence
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Só para VPS (neste PC o Tunnel já roda como serviço do Windows).
+  cloudflared:
+    image: cloudflare/cloudflared:2025.10.0
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    depends_on:
+      - web
+      - qa-hub
+    command: tunnel --no-autoupdate run
+    environment:
+      # Opcional: o compose valida variáveis até de serviços desligados, então sem "?" aqui.
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+
+volumes:
+  db_data:
+  uploads:
+  evidence:

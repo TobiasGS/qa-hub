@@ -1,0 +1,27 @@
+// Deploy do QA Hub no Cloudflare Workers (via OpenNext).
+// Segredos ficam fora daqui:  npx wrangler secret put SESSION_SECRET
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "qa-hub",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "routes": [{ "pattern": "qa.seu-dominio.com", "custom_domain": true }],
+  // Evidências (prints, vídeos). Crie antes:  npx wrangler r2 bucket create qa-hub-evidence
+  "r2_buckets": [{ "binding": "EVIDENCE", "bucket_name": "qa-hub-evidence" }],
+  "vars": {
+    "KIWI_MODE": "real",
+    "KIWI_URL": "https://kiwi.seu-dominio.com",
+    "KIWI_BUG_TRACKER_ID": "1",
+    "REQUIREMENT_URL_JIRA": "https://sua-empresa.atlassian.net/browse/{key}",
+    // Azure DevOps Server (on-premises): troque <servidor>, <coleção> e <projeto> pelos seus.
+    "REQUIREMENT_URL_AZURE": "https://<servidor>/tfs/<coleção>/<projeto>/_workitems/edit/{key}",
+    // O PAT vai como secret:  npx wrangler secret put AZURE_DEVOPS_PAT
+    "AZURE_DEVOPS_URL": "https://<servidor>/tfs/<coleção>/<projeto>",
+    "AZURE_API_VERSION": "6.0",
+    "AZURE_BUG_TYPE": "Bug",
+    "EVIDENCE_STORAGE": "r2",
+    "QA_HUB_URL": "https://qa.seu-dominio.com"
+  }
+}

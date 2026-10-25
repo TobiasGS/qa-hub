@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Exemplo de saída do mocha-junit-reporter (já mesclada) para testar o envio ao Kiwi. -->
+<testsuites name="Cypress" tests="4" failures="1" time="12.4">
+  <testsuite name="Checkout" tests="2" failures="1" time="7.1">
+    <testcase classname="Checkout" name="finaliza compra com cartão" time="3.2"/>
+    <testcase classname="Checkout" name="calcula frete por CEP" time="3.9">
+      <failure message="expected '#frete' to contain 'R$'" type="AssertionError">AssertionError: expected '#frete' to contain 'R$'</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="Login" tests="2" failures="0" time="5.3">
+    <testcase classname="Login" name="entra com senha correta" time="2.1"/>
+    <testcase classname="Login" name="bloqueia após 5 tentativas" time="3.2"/>
+  </testsuite>
+</testsuites>

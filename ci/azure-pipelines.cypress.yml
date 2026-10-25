@@ -1,0 +1,64 @@
+# Exemplo: roda o Cypress e envia o resultado para o Kiwi como um TestRun.
+# Pré-requisitos no Azure DevOps:
+#   Library > Variable group "kiwi-tcms" com KIWI_USER e KIWI_PASSWORD (marcada como secreta)
+#   Um usuário técnico no Kiwi (ex.: ci-bot) com permissão de criar runs.
+
+trigger:
+  - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: kiwi-tcms
+  - name: KIWI_URL
+    value: https://kiwi.seu-dominio.com
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: "20.x"
+
+  - script: npm ci
+    displayName: Instalar dependências
+
+  - script: npx cypress run
+    displayName: Rodar Cypress
+    continueOnError: true
+
+  - script: npx jrm cypress/results/merged.xml "cypress/results/results-*.xml"
+    displayName: Juntar relatórios JUnit
+    condition: always()
+
+  # Aba "Tests" nativa do Azure (gratuita), além do Kiwi.
+  - task: PublishTestResults@2
+    condition: always()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: cypress/results/merged.xml
+      testRunTitle: Cypress
+
+  - task: UsePythonVersion@0
+    condition: always()
+    inputs:
+      versionSpec: "3.12"
+
+  - script: |
+      pip install --quiet kiwitcms-junit.xml-plugin
+      cat > ~/.tcms.conf <<EOF
+      [tcms]
+      url = $(KIWI_URL)/xml-rpc/
+      username = $KIWI_USER
+      password = $KIWI_PASSWORD
+      EOF
+      tcms-junit.xml-plugin cypress/results/merged.xml
+    displayName: Enviar resultados para o Kiwi
+    condition: always()
+    env:
+      KIWI_USER: $(KIWI_USER)
+      KIWI_PASSWORD: $(KIWI_PASSWORD)
+      TCMS_PRODUCT: Loja Web
+      TCMS_PRODUCT_VERSION: 1.x
+      TCMS_BUILD: $(Build.BuildNumber)
+      # Opcional: plano onde os casos automáticos ficam (senão o plugin cria um).
+      # TCMS_PLAN_ID: "3"
