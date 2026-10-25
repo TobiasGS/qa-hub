@@ -7,12 +7,13 @@ import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
 import { isEvidence } from "@/lib/evidence/shared";
 import { outcomeOf, summarize } from "@/lib/metrics";
 import { requireKiwi } from "@/lib/session";
+import { canSeeRun, visibleSet } from "@/lib/visibility";
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
-  const { kiwi } = await requireKiwi();
+  const { kiwi, viewer } = await requireKiwi();
   const id = Number((await params).id);
   const [[run], executions, statuses] = await Promise.all([kiwi.runs({ id }), kiwi.executions({ run: id }), kiwi.statuses()]);
-  if (!run) notFound();
+  if (!run || !canSeeRun(await visibleSet(kiwi, viewer), run.id)) notFound();
   const [links, [plan]] = await Promise.all([executions.length ? kiwi.links({ execution__in: executions.map((e) => e.id) }) : [], kiwi.plans({ id: run.plan })]);
   const builds = plan ? await kiwi.builds({ version: plan.product_version }) : [];
   const s = summarize(executions, statuses);

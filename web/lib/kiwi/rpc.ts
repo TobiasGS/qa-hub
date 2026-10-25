@@ -95,7 +95,7 @@ export function realKiwi(sessionId: string): KiwiApi {
       return one("Classification.filter", r.id);
     },
     createProduct: async (values) => {
-      const r = await call<{ id: number }>("Product.create", { ...values, description: "" });
+      const r = await call<{ id: number }>("Product.create", { description: "", ...values });
       return one("Product.filter", r.id);
     },
     createVersion: async (values) => {

@@ -11,13 +11,16 @@ import { outcomeOf, summarize, type Outcome } from "@/lib/metrics";
 import { caseOptions, planOptions } from "@/lib/options";
 import { parseRequirements, requirementTemplates } from "@/lib/requirements";
 import { requireKiwi } from "@/lib/session";
+import { canEditPlan, canSeePlan, visibleSet } from "@/lib/visibility";
 
 export default async function PlanPage({ params }: { params: Promise<{ id: string }> }) {
-  const { kiwi } = await requireKiwi();
+  const { kiwi, viewer } = await requireKiwi();
   const id = Number((await params).id);
   const [[plan], cases, runs, statuses] = await Promise.all([kiwi.plans({ id }), kiwi.cases({ plan: id }), kiwi.runs({ plan: id }), kiwi.statuses()]);
-  if (!plan) notFound();
-  const [pOptions, cOptions] = await Promise.all([planOptions(kiwi), caseOptions(kiwi, plan.product)]);
+  const visible = await visibleSet(kiwi, viewer);
+  if (!plan || !canSeePlan(visible, plan.id)) notFound();
+  const editable = canEditPlan(viewer, plan);
+  const [pOptions, cOptions] = await Promise.all([planOptions(kiwi, visible), caseOptions(kiwi, plan.product)]);
   const executions = runs.length ? await kiwi.executions({ run__in: runs.map((r) => r.id) }) : [];
   const templates = requirementTemplates();
 
@@ -45,6 +48,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
             <h1 className="text-xl font-semibold tracking-tight">{plan.name}</h1>
             <Badge>{plan.type__name}</Badge>
             {!plan.is_active && <Badge className="bg-blocked/20">arquivado</Badge>}
+            {!editable && <Badge className="bg-accent/15 text-accent">Compartilhado comigo · só leitura</Badge>}
           </div>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-fg-2">
             Projeto: {plan.product__name} · por {plan.author__username}
@@ -59,8 +63,8 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <PlanToolbar plan={plan} options={pOptions} templates={templates} />
-          {plan.is_active && activeCases > 0 && (
+          {editable && <PlanToolbar plan={plan} options={pOptions} templates={templates} />}
+          {editable && plan.is_active && activeCases > 0 && (
             <ButtonLink href={`/plans/${plan.id}/runs/new`} variant="primary">
               <Play className="size-4" /> Novo run
             </ButtonLink>
@@ -74,7 +78,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
 
       <div className="grid gap-3 lg:grid-cols-3">
         <Card className="pb-2 lg:col-span-2">
-          <CaseTable planId={plan.id} cases={sortedCases} lastOutcome={lastOutcome} options={cOptions} templates={templates} />
+          <CaseTable planId={plan.id} cases={sortedCases} lastOutcome={lastOutcome} options={cOptions} templates={templates} readOnly={!editable} />
         </Card>
 
         <Card>

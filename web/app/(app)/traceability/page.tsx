@@ -6,13 +6,14 @@ import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { traceabilityData, type Outcome } from "@/lib/metrics";
 import { requirementTemplates, requirementUrl } from "@/lib/requirements";
 import { requireKiwi } from "@/lib/session";
+import { visibleSet } from "@/lib/visibility";
 
 const ROW_LABEL: Record<Outcome, string> = { passed: "Coberto", failed: "Com falha", blocked: "Bloqueado", pending: "Não executado" };
 
 export default async function TraceabilityPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const { kiwi } = await requireKiwi();
+  const { kiwi, viewer } = await requireKiwi();
   const sp = await searchParams;
-  const { rows, stats } = await traceabilityData(kiwi);
+  const { rows, stats } = await traceabilityData(kiwi, await visibleSet(kiwi, viewer));
   const visible = rows.filter((r) => !sp.outcome || r.outcome === sp.outcome);
   const templates = requirementTemplates();
 

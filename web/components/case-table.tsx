@@ -27,6 +27,7 @@ export function CaseTable({
   lastOutcome,
   options,
   templates,
+  readOnly = false,
 }: {
   planId: number;
   cases: TestCase[];
@@ -34,6 +35,8 @@ export function CaseTable({
   lastOutcome: Record<number, Outcome>;
   options: CaseOptions;
   templates: RequirementTemplates;
+  /** Plano de outra pessoa (visível por atribuição): só leitura, sem criar/editar/clonar/remover. */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [action, setAction] = useState<Action>(null);
@@ -74,9 +77,11 @@ export function CaseTable({
           <h2 className="text-sm font-semibold">Casos de teste</h2>
           <p className="mt-0.5 text-xs text-muted">{cases.length} neste plano</p>
         </div>
-        <Button variant="primary" onClick={() => setAction({ kind: "new" })}>
-          <Plus className="size-4" /> Novo caso
-        </Button>
+        {!readOnly && (
+          <Button variant="primary" onClick={() => setAction({ kind: "new" })}>
+            <Plus className="size-4" /> Novo caso
+          </Button>
+        )}
       </div>
 
       {error && <p className="mx-5 mt-3 rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed">{error}</p>}
@@ -103,14 +108,16 @@ export function CaseTable({
                 </div>
                 <StatusBadge outcome={lastOutcome[c.id] ?? "pending"} label={lastOutcome[c.id] ? undefined : "Nunca executado"} className="mt-0.5 hidden w-36 shrink-0 sm:inline-flex" />
                 {cloning === c.id && <Loader2 className="mt-1.5 size-4 shrink-0 animate-spin text-muted" aria-label="Clonando" />}
-                <RowMenu
-                  items={[
-                    { label: "Editar", icon: Pencil, onClick: () => setAction({ kind: "edit", testCase: c }) },
-                    { label: "Clonar caso", icon: Copy, onClick: () => cloneCase(c) },
-                    { label: disabled ? "Reativar" : "Desativar", icon: disabled ? RotateCcw : Ban, onClick: () => setAction({ kind: "toggle", testCase: c }) },
-                    { label: "Remover do plano", icon: Unlink, onClick: () => setAction({ kind: "remove", testCase: c }), danger: true },
-                  ]}
-                />
+                {!readOnly && (
+                  <RowMenu
+                    items={[
+                      { label: "Editar", icon: Pencil, onClick: () => setAction({ kind: "edit", testCase: c }) },
+                      { label: "Clonar caso", icon: Copy, onClick: () => cloneCase(c) },
+                      { label: disabled ? "Reativar" : "Desativar", icon: disabled ? RotateCcw : Ban, onClick: () => setAction({ kind: "toggle", testCase: c }) },
+                      { label: "Remover do plano", icon: Unlink, onClick: () => setAction({ kind: "remove", testCase: c }), danger: true },
+                    ]}
+                  />
+                )}
               </li>
             );
           })}

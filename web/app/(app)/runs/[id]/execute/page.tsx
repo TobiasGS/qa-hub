@@ -1,13 +1,14 @@
 import { notFound } from "next/navigation";
 import { ExecuteRunner } from "@/components/execute-runner";
 import { requireKiwi } from "@/lib/session";
+import { canSeeRun, visibleSet } from "@/lib/visibility";
 
 export default async function ExecutePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ i?: string; e?: string }> }) {
-  const { kiwi } = await requireKiwi();
+  const { kiwi, viewer } = await requireKiwi();
   const id = Number((await params).id);
   const sp = await searchParams;
   const [[run], executions, statuses] = await Promise.all([kiwi.runs({ id }), kiwi.executions({ run: id }), kiwi.statuses()]);
-  if (!run) notFound();
+  if (!run || !canSeeRun(await visibleSet(kiwi, viewer), run.id)) notFound();
   const [cases, links] = executions.length
     ? await Promise.all([kiwi.cases({ id__in: executions.map((e) => e.case) }), kiwi.links({ execution__in: executions.map((e) => e.id) })])
     : [[], []];

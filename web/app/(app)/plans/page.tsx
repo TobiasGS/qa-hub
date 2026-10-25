@@ -10,14 +10,16 @@ import { summarize } from "@/lib/metrics";
 import { planOptions } from "@/lib/options";
 import { parseRequirements, requirementTemplates } from "@/lib/requirements";
 import { requireKiwi } from "@/lib/session";
+import { canSeePlan, visibleSet } from "@/lib/visibility";
 
 export default async function PlansPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const { kiwi } = await requireKiwi();
+  const { kiwi, viewer } = await requireKiwi();
+  const visible = await visibleSet(kiwi, viewer);
   const sp = await searchParams;
   const archived = sp.archived === "1";
   const project = sp.project ? Number(sp.project) : null;
-  const [allPlans, runs, statuses, options] = await Promise.all([kiwi.plans({ is_active: !archived }), kiwi.runs(), kiwi.statuses(), planOptions(kiwi)]);
-  const plans = allPlans.filter((p) => !project || p.product === project);
+  const [allPlans, runs, statuses, options] = await Promise.all([kiwi.plans({ is_active: !archived }), kiwi.runs(), kiwi.statuses(), planOptions(kiwi, visible)]);
+  const plans = allPlans.filter((p) => (!project || p.product === project) && canSeePlan(visible, p.id));
   const templates = requirementTemplates();
 
   // Último run de cada plano, para mostrar o estado atual.
@@ -70,7 +72,16 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {sectionPlans.map((plan) => (
-                    <PlanCard key={plan.id} plan={plan} run={lastRun.get(plan.id)} runs={runs} executions={executions} statuses={statuses} templates={templates} />
+                    <PlanCard
+                      key={plan.id}
+                      plan={plan}
+                      shared={!!visible && !visible.ownedPlanIds.has(plan.id)}
+                      run={lastRun.get(plan.id)}
+                      runs={runs}
+                      executions={executions}
+                      statuses={statuses}
+                      templates={templates}
+                    />
                   ))}
                 </div>
               </section>
@@ -84,6 +95,7 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
 
 function PlanCard({
   plan,
+  shared,
   run,
   runs,
   executions,
@@ -91,6 +103,8 @@ function PlanCard({
   templates,
 }: {
   plan: TestPlan;
+  /** Plano de outra pessoa, visível porque há run atribuído a quem está vendo. */
+  shared: boolean;
   run?: TestRun;
   runs: TestRun[];
   executions: Awaited<ReturnType<Awaited<ReturnType<typeof requireKiwi>>["kiwi"]["executions"]>>;
@@ -110,6 +124,7 @@ function PlanCard({
         </h3>
         <Badge>{plan.type__name}</Badge>
       </div>
+      {shared && <Badge className="mt-1 bg-accent/15 text-accent">Compartilhado comigo</Badge>}
       <p className="mt-1 text-xs text-muted">
         {planRuns} runs · por {plan.author__username}
       </p>

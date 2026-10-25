@@ -1,4 +1,5 @@
 import { ApiError, apiRoute, readJson, toId, toText } from "@/lib/api";
+import { requireExecutionVisible } from "@/lib/visibility";
 import { AzureError, createBug, reproStepsHtml, SEVERITIES } from "@/lib/azure";
 import { AZURE_NOT_CONFIGURED, bugContext, reproData } from "@/lib/bug";
 import { parseRequirements } from "@/lib/requirements";
@@ -9,8 +10,9 @@ import { parseRequirements } from "@/lib/requirements";
  *   { title, severity, notes }     → cria no destino do card do plano:
  *       card AB#n → Bug no Azure DevOps, filho do card;  outros → Bug.report do Kiwi
  */
-export const POST = apiRoute<{ id: string }>(async ({ kiwi }, req, { id }) => {
+export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id }) => {
   const executionId = toId(id);
+  await requireExecutionVisible(kiwi, viewer, executionId);
   const raw = await readJson(req).catch(() => ({}) as Record<string, unknown>);
 
   if (raw.url) {

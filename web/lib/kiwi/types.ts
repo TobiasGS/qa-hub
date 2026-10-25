@@ -8,6 +8,8 @@ export type Query = Record<string, unknown>;
 export interface Product {
   id: number;
   name: string;
+  /** O QA Hub guarda aqui o dono do projeto: "[qahub-owner:<usuário>]" (o Kiwi não registra quem criou). */
+  description?: string;
 }
 
 export interface Classification {
@@ -55,6 +57,7 @@ export interface User {
   username: string;
   first_name?: string;
   last_name?: string;
+  is_superuser?: boolean;
 }
 
 export interface TestPlan {
@@ -186,7 +189,7 @@ export interface KiwiApi {
   users(query?: Query): Promise<User[]>;
   plans(query?: Query): Promise<TestPlan[]>;
   runs(query?: Query): Promise<TestRun[]>;
-  /** Aceita `plan: id` para trazer os casos de um plano. */
+  /** Aceita `plan: id` / `plan__in: [ids]` para trazer os casos de planos. */
   cases(query?: Query): Promise<TestCase[]>;
   executions(query: Query): Promise<TestExecution[]>;
   statuses(): Promise<ExecutionStatus[]>;
@@ -195,7 +198,7 @@ export interface KiwiApi {
 
   classifications(query?: Query): Promise<Classification[]>;
   createClassification(values: { name: string }): Promise<Classification>;
-  createProduct(values: { name: string; classification: number }): Promise<Product>;
+  createProduct(values: { name: string; classification: number; description?: string }): Promise<Product>;
   createVersion(values: { product: number; value: string }): Promise<Version>;
   createCategory(values: { product: number; name: string }): Promise<Category>;
   createPlanType(values: { name: string }): Promise<PlanType>;

@@ -1,4 +1,5 @@
 import { ApiError, apiRoute, currentUser, readJson, toId, toText } from "@/lib/api";
+import { requirePlanEditable } from "@/lib/visibility";
 
 /**
  * Cria um run a partir de um plano.
@@ -13,8 +14,8 @@ export const POST = apiRoute(async (ctx, req) => {
   const cases = Array.isArray(raw.cases) ? raw.cases.map((c: { id?: unknown; assignee?: unknown }) => ({ id: toId(c.id, "caso"), assignee: c.assignee ? toId(c.assignee, "responsável") : null })) : [];
   if (!cases.length) throw new ApiError("Selecione pelo menos um caso");
 
-  const [plan] = await kiwi.plans({ id: planId });
-  if (!plan) throw new ApiError("Plano não encontrado", 404);
+  // Só o dono do plano (ou admin) cria runs nele; 404 se nem enxerga o plano.
+  const plan = await requirePlanEditable(kiwi, ctx.viewer, planId);
 
   const newBuild = toText(raw.newBuild, "nova build");
   const build = newBuild ? (await kiwi.createBuild({ name: newBuild, version: plan.product_version })).id : toId(raw.build, "build");

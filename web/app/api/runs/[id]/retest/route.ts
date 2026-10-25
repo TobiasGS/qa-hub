@@ -1,4 +1,5 @@
 import { ApiError, apiRoute, currentUser, readJson, toId } from "@/lib/api";
+import { requireRunVisible } from "@/lib/visibility";
 import { outcomeOf } from "@/lib/metrics";
 
 /** Cria um run novo só com os casos que falharam ou ficaram bloqueados. Corpo: { build } */
@@ -6,6 +7,7 @@ export const POST = apiRoute<{ id: string }>(async (ctx, req, { id }) => {
   const { kiwi } = ctx;
   const raw = await readJson(req);
   const sourceId = toId(id);
+  await requireRunVisible(kiwi, ctx.viewer, sourceId);
   const [[source], executions, statuses] = await Promise.all([kiwi.runs({ id: sourceId }), kiwi.executions({ run: sourceId }), kiwi.statuses()]);
   if (!source) throw new ApiError("Run não encontrado", 404);
 

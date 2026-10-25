@@ -1,4 +1,5 @@
 import { apiRoute, toId } from "@/lib/api";
+import { requireCaseVisible } from "@/lib/visibility";
 import { outcomeOf } from "@/lib/metrics";
 import { durationOf, parseTimerComments } from "@/lib/timer";
 
@@ -8,8 +9,9 @@ import { durationOf, parseTimerComments } from "@/lib/timer";
  * Uma chamada de comentários por execução: o limite de 10 mantém a rota
  * abaixo do teto de subrequests do Cloudflare Workers.
  */
-export const GET = apiRoute<{ id: string }>(async ({ kiwi }, _req, { id }) => {
+export const GET = apiRoute<{ id: string }>(async ({ kiwi, viewer }, _req, { id }) => {
   const caseId = toId(id);
+  await requireCaseVisible(kiwi, viewer, caseId);
   const [executions, statuses] = await Promise.all([kiwi.executions({ case: caseId }), kiwi.statuses()]);
   const latest = executions.sort((a, b) => b.id - a.id).slice(0, 10);
   if (!latest.length) return { attempts: [] };

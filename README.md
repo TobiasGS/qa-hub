@@ -189,6 +189,23 @@ Sem PAT, o diálogo explica o que falta e o botão fica desabilitado. O QA Hub n
 - **Linha do tempo:** início, pausas, retomadas e fim viram comentários legíveis na execução, como `⏱ Pausado · 4min 12s`.
 - **Histórico:** o painel "Histórico de execuções e tempo" mostra as últimas 10 tentativas do caso (o run original e os re-testes), com resultado, testador, tempo e as pausas.
 
+### Perfis e visibilidade
+
+Cada pessoa vê no QA Hub o que **criou** mais o que foi **atribuído** a ela:
+
+| Item | Aparece quando… | Pode editar quando… |
+|---|---|---|
+| Run | ela é o manager ou o testador padrão, tem execução atribuída, ou o run é de um plano dela | — (executa se pode ver) |
+| Plano | ela é a autora, ou tem algum run visível nele | é a autora |
+| Caso | está num plano visível, ou ela é a autora | é autora do caso ou do plano |
+| Projeto | ela criou pelo "+ Projeto", ou tem plano visível nele | — |
+
+- **Plano compartilhado:** um plano de outra pessoa que aparece só por atribuição vem com o selo **"Compartilhado comigo · só leitura"**. Dá para executar os casos atribuídos, mas não editar, arquivar, criar caso, clonar ou criar run.
+- **Admin:** quem é **superusuário no Kiwi** vê tudo. No topo há o seletor **Tudo / Só os meus**, para ver como um usuário comum.
+- **Bloqueio no servidor:** a regra também vale para links e para a API. Abrir pela URL um plano ou run que não é seu dá "não encontrado", e tentar alterar dá erro 403.
+- **Dono do projeto:** o Kiwi não registra quem criou um projeto (Product). O QA Hub grava `[qahub-owner:<usuário>]` na descrição dele. Projetos antigos, sem essa marca, aparecem só pelos planos.
+- **O admin do Kiwi** (`kiwi.seu-dominio.com`) mostra tudo para quem tem acesso a ele. Deixe essa aplicação liberada só para administradores no Cloudflare Access.
+
 ### Arquivar em vez de excluir
 
 A API do Kiwi não apaga planos. Apagar casos destruiria o histórico de execuções, que é a base do dashboard. Por isso:

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { KiwiError, login } from "@/lib/kiwi/rpc";
+import { mockKiwi } from "@/lib/kiwi/mock";
+import { KiwiError, login, realKiwi } from "@/lib/kiwi/rpc";
 import { getSession, isMock } from "@/lib/session";
 
 export async function POST(req: Request) {
@@ -14,6 +15,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg }, { status: 401 });
   }
   session.username = username;
+  // Perfil: id e se é superusuário (admin vê tudo; os demais, só o que é deles).
+  const kiwi = isMock() ? mockKiwi(username) : realKiwi(session.kiwiSession!);
+  const [me] = await kiwi.users({ username }).catch(() => []);
+  session.userId = me?.id;
+  session.isAdmin = !!me?.is_superuser;
   await session.save();
   return NextResponse.json({ ok: true });
 }

@@ -10,7 +10,21 @@ export interface SessionData {
   username?: string;
   /** Valor do cookie `sessionid` do Kiwi; nunca chega ao navegador em claro. */
   kiwiSession?: string;
+  /** Guardados no login; sessões antigas sem eles buscam o usuário na hora. */
+  userId?: number;
+  isAdmin?: boolean;
 }
+
+/** Quem está vendo e o que pode ver (veja lib/visibility.ts). */
+export interface Viewer {
+  username: string;
+  userId: number | null;
+  isAdmin: boolean;
+  /** Só vale para admin: "all" vê tudo, "mine" aplica as mesmas regras de um usuário comum. */
+  scope: "all" | "mine";
+}
+
+export const SCOPE_COOKIE = "qahub_scope";
 
 export const isMock = () => process.env.KIWI_MODE === "mock";
 
@@ -28,16 +42,35 @@ export async function getSession() {
   return getIronSession<SessionData>(await cookies(), options());
 }
 
-/** Para páginas: devolve o cliente do Kiwi do usuário logado ou manda para /login. */
-export async function requireKiwi(): Promise<{ kiwi: KiwiApi; username: string }> {
+export interface KiwiContext {
+  kiwi: KiwiApi;
+  username: string;
+  viewer: Viewer;
+}
+
+async function contextFrom(s: SessionData): Promise<KiwiContext> {
+  const username = s.username!;
+  const kiwi = isMock() ? mockKiwi(username) : realKiwi(s.kiwiSession!);
+  let { userId, isAdmin } = s;
+  if (userId === undefined || isAdmin === undefined) {
+    const [me] = await kiwi.users({ username });
+    userId = me?.id;
+    isAdmin = !!me?.is_superuser;
+  }
+  const scope = (await cookies()).get(SCOPE_COOKIE)?.value === "mine" ? "mine" : "all";
+  return { kiwi, username, viewer: { username, userId: userId ?? null, isAdmin: !!isAdmin, scope: isAdmin ? scope : "mine" } };
+}
+
+/** Para páginas: devolve o cliente do Kiwi e o perfil do usuário logado, ou manda para /login. */
+export async function requireKiwi(): Promise<KiwiContext> {
   const s = await getSession();
   if (!s.username || (!isMock() && !s.kiwiSession)) redirect("/login");
-  return { kiwi: isMock() ? mockKiwi(s.username) : realKiwi(s.kiwiSession!), username: s.username };
+  return contextFrom(s);
 }
 
 /** Para rotas /api: igual ao requireKiwi, mas devolve null em vez de redirecionar. */
-export async function kiwiForApi(): Promise<{ kiwi: KiwiApi; username: string } | null> {
+export async function kiwiForApi(): Promise<KiwiContext | null> {
   const s = await getSession();
   if (!s.username || (!isMock() && !s.kiwiSession)) return null;
-  return { kiwi: isMock() ? mockKiwi(s.username) : realKiwi(s.kiwiSession!), username: s.username };
+  return contextFrom(s);
 }

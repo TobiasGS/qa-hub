@@ -1,6 +1,7 @@
 import type { ExecutionStatus, KiwiApi, LinkReference, TestCase, TestExecution, TestRun } from "./kiwi/types";
 import { parseRequirements } from "./requirements";
 import { durationOf, parseKiwiDate } from "./timer";
+import type { Visible } from "./visibility";
 
 export type Outcome = "passed" | "failed" | "blocked" | "pending";
 
@@ -57,8 +58,12 @@ function weekStart(iso: string) {
  * Dados do dashboard. Com `project`, a tendência é por build daquele projeto;
  * com todos os projetos, as builds não são comparáveis entre si e a tendência é por semana.
  */
-export async function dashboardData(kiwi: KiwiApi, { project }: { project: number | null }) {
-  const [allRuns, statuses, builds, plans, projects] = await Promise.all([kiwi.runs(), kiwi.statuses(), kiwi.builds(), kiwi.plans(), kiwi.products()]);
+/** `visible` = o que o usuário pode ver (lib/visibility.ts); null = tudo (admin). */
+export async function dashboardData(kiwi: KiwiApi, { project, visible }: { project: number | null; visible: Visible | null }) {
+  const [runsAll, statuses, builds, plansAll, projectsAll] = await Promise.all([kiwi.runs(), kiwi.statuses(), kiwi.builds(), kiwi.plans(), kiwi.products()]);
+  const allRuns = visible ? runsAll.filter((r) => visible.runIds.has(r.id)) : runsAll;
+  const plans = visible ? plansAll.filter((p) => visible.planIds.has(p.id)) : plansAll;
+  const projects = visible ? projectsAll.filter((p) => visible.projectIds.has(p.id)) : projectsAll;
   const planById = new Map(plans.map((p) => [p.id, p]));
   const productOf = (run: TestRun | undefined) => (run ? (planById.get(run.plan)?.product ?? 0) : 0);
   const runs = allRuns.filter((r) => !project || productOf(r) === project);
@@ -187,8 +192,9 @@ export interface TraceRow {
 
 const SEVERITY: Outcome[] = ["failed", "blocked", "pending", "passed"];
 
-export async function traceabilityData(kiwi: KiwiApi) {
-  const [cases, statuses] = await Promise.all([kiwi.cases(), kiwi.statuses()]);
+export async function traceabilityData(kiwi: KiwiApi, visible: Visible | null) {
+  const [casesAll, statuses] = await Promise.all([kiwi.cases(), kiwi.statuses()]);
+  const cases = visible ? casesAll.filter((c) => visible.caseIds.has(c.id)) : casesAll;
   const executions = cases.length ? await kiwi.executions({ case__in: cases.map((c) => c.id) }) : [];
   const bugs = executions.length ? await kiwi.links({ execution__in: executions.map((e) => e.id), is_defect: true }) : [];
 

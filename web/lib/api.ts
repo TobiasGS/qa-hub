@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import type { KiwiApi, User } from "./kiwi/types";
-import { kiwiForApi } from "./session";
+import type { User } from "./kiwi/types";
+import { kiwiForApi, type KiwiContext } from "./session";
 
 /** Erro de validação: vira HTTP 400 com a mensagem para o usuário. */
 export class ApiError extends Error {
@@ -13,10 +13,8 @@ export class ApiError extends Error {
   }
 }
 
-export interface ApiContext {
-  kiwi: KiwiApi;
-  username: string;
-}
+/** Cliente do Kiwi + perfil de quem chamou (para checar visibilidade). */
+export type ApiContext = KiwiContext;
 
 /**
  * Envolve uma rota /api: exige sessão, converte o retorno em JSON e os erros em

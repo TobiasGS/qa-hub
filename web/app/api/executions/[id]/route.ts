@@ -1,4 +1,5 @@
 import { ApiError, apiRoute, readJson, toId } from "@/lib/api";
+import { requireExecutionVisible } from "@/lib/visibility";
 import { kiwiDate, timerComment } from "@/lib/timer";
 
 /**
@@ -6,8 +7,9 @@ import { kiwiDate, timerComment } from "@/lib/timer";
  * Com `elapsed` (segundos efetivos do cronômetro), o tempo fica no Kiwi como
  * stop_date = agora e start_date = agora − elapsed, e a linha do tempo ganha o "finish".
  */
-export const PATCH = apiRoute<{ id: string }>(async ({ kiwi }, req, { id }) => {
+export const PATCH = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id }) => {
   const executionId = toId(id);
+  await requireExecutionVisible(kiwi, viewer, executionId);
   const raw = await readJson(req);
   const status = toId(raw.status, "status");
   const comment = typeof raw.comment === "string" ? raw.comment.trim() : "";

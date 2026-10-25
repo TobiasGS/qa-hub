@@ -1,4 +1,5 @@
 import { ApiError, apiRoute, readJson, toId } from "@/lib/api";
+import { requireExecutionVisible } from "@/lib/visibility";
 import { kiwiDate, timerComment, type TimerEvent } from "@/lib/timer";
 
 const EVENTS: TimerEvent[] = ["start", "pause", "resume"];
@@ -9,8 +10,9 @@ const EVENTS: TimerEvent[] = ["start", "pause", "resume"];
  *   RUNNING: start_date = agora − acumulado (o tempo corre a partir dele)
  *   PAUSED:  start_date/stop_date guardam o acumulado (stop − start)
  */
-export const POST = apiRoute<{ id: string }>(async ({ kiwi }, req, { id }) => {
+export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id }) => {
   const executionId = toId(id);
+  await requireExecutionVisible(kiwi, viewer, executionId);
   const raw = await readJson(req);
   const event = raw.event as TimerEvent;
   const elapsed = Math.max(0, Math.min(12 * 3600, Math.round(Number(raw.elapsed) || 0)));

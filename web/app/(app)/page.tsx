@@ -7,13 +7,15 @@ import { Card, CardHeader, cn, EmptyState, PageHeader } from "@/components/ui";
 import { dashboardData } from "@/lib/metrics";
 import { myPendingTests } from "@/lib/my-tests";
 import { requireKiwi } from "@/lib/session";
+import { visibleSet } from "@/lib/visibility";
 import { formatDuration } from "@/lib/timer";
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const { kiwi, username } = await requireKiwi();
+  const { kiwi, username, viewer } = await requireKiwi();
   const sp = await searchParams;
   const project = sp.project ? Number(sp.project) : null;
-  const [d, mine] = await Promise.all([dashboardData(kiwi, { project }), myPendingTests(kiwi, username)]);
+  const visible = await visibleSet(kiwi, viewer);
+  const [d, mine] = await Promise.all([dashboardData(kiwi, { project, visible }), myPendingTests(kiwi, username)]);
   const delta = d.latest.passRate !== null && d.previous?.passRate != null ? d.latest.passRate - d.previous.passRate : null;
   const projectName = d.projects.find((p) => p.id === project)?.name;
   const buildHint = project ? (d.latestBuilds[0] ? `build ${d.latestBuilds[0]}` : undefined) : "builds atuais";

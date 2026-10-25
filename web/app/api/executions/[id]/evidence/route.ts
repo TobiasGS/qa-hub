@@ -1,4 +1,5 @@
 import { ApiError, apiRoute, toId } from "@/lib/api";
+import { requireExecutionVisible } from "@/lib/visibility";
 import { EVIDENCE_PATH, EVIDENCE_PREFIX, evidencePath, formatBytes, isEvidence, typeOf } from "@/lib/evidence/shared";
 import { isValidKey, storage } from "@/lib/evidence/storage";
 
@@ -7,8 +8,9 @@ import { isValidKey, storage } from "@/lib/evidence/storage";
  * stream até o armazenamento sem carregar tudo na memória.
  *   PUT /api/executions/12/evidence?name=print.png
  */
-export const PUT = apiRoute<{ id: string }>(async ({ kiwi }, req, { id }) => {
+export const PUT = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id }) => {
   const executionId = toId(id);
+  await requireExecutionVisible(kiwi, viewer, executionId);
   const name = new URL(req.url).searchParams.get("name")?.trim() ?? "";
   const type = typeOf(name);
   if (!type) throw new ApiError("Tipo de arquivo não aceito. Use imagem (png, jpg, gif, webp), vídeo (mp4, webm, mov), pdf, txt, log ou har.");
@@ -29,8 +31,9 @@ export const PUT = apiRoute<{ id: string }>(async ({ kiwi }, req, { id }) => {
 });
 
 /** Remove a evidência: o arquivo e o link na execução.  DELETE ...?link=<id> */
-export const DELETE = apiRoute<{ id: string }>(async ({ kiwi }, req, { id }) => {
+export const DELETE = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id }) => {
   const executionId = toId(id);
+  await requireExecutionVisible(kiwi, viewer, executionId);
   const linkId = toId(new URL(req.url).searchParams.get("link"), "link");
   const [link] = await kiwi.links({ id: linkId, execution: executionId });
   if (!link || !isEvidence(link)) throw new ApiError("Evidência não encontrada", 404);

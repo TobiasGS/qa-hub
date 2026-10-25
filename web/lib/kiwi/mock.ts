@@ -142,7 +142,8 @@ function seed(): Db {
       { id: 1, name: "--default--", product: 1 },
       { id: 2, name: "--default--", product: 2 },
     ],
-    users: [...TESTERS, "ci-bot"].map((username, i) => ({ id: i + 1, username })),
+    // ana.souza é a admin dos dados de exemplo; quem entra com outro nome é usuário comum.
+    users: [...TESTERS, "ci-bot"].map((username, i) => ({ id: i + 1, username, is_superuser: username === "ana.souza" })),
     builds: [],
     plans: [],
     cases: [],
@@ -221,7 +222,7 @@ function seed(): Db {
           plan__name: plan.name,
           build: build.id,
           build__name: build.name,
-          manager__username: "ana.souza",
+          manager__username: plan.author__username,
           default_tester__username: kind === "Cypress" ? "ci-bot" : TESTERS[plan.id % TESTERS.length],
           start_date: start.toISOString(),
           stop_date: isLatest && kind === "Manual" ? null : new Date(start.getTime() + 2 * 3600_000).toISOString(),
@@ -295,7 +296,7 @@ function clonePlanTypes() {
 }
 
 // Sobrevive ao hot reload do Next em dev. A versão invalida dados de um formato antigo.
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const g = globalThis as unknown as { __kiwiMock?: Db; __kiwiMockVersion?: number };
 if (g.__kiwiMockVersion !== DB_VERSION) {
   g.__kiwiMock = seed();
@@ -357,11 +358,17 @@ export function mockKiwi(username: string): KiwiApi {
     priorities: async () => clone(PRIORITIES),
     caseStatuses: async () => clone(CASE_STATUSES),
     users: async (q) => clone(match(db.users, q)),
-    plans: async (q) => clone(match(db.plans, q)),
+    plans: async (q = {}) => {
+      // `cases: id` = planos que contêm o caso (N:N no Kiwi).
+      const { cases, ...rest } = q;
+      const rows = cases === undefined ? db.plans : db.plans.filter((p) => db.cases.find((c) => c.id === Number(cases))?.plans.includes(p.id));
+      return clone(match(rows, rest));
+    },
     runs: async (q) => clone(match(db.runs, q)),
     cases: async (q = {}) => {
-      const { plan, ...rest } = q;
-      const rows = plan === undefined ? db.cases : db.cases.filter((c) => c.plans.includes(Number(plan)));
+      const { plan, plan__in, ...rest } = q;
+      let rows = plan === undefined ? db.cases : db.cases.filter((c) => c.plans.includes(Number(plan)));
+      if (Array.isArray(plan__in)) rows = rows.filter((c) => c.plans.some((p) => (plan__in as number[]).includes(p)));
       return match(rows, rest).map(toCase);
     },
     executions: async (q) => clone(match(db.executions, q)),
@@ -375,9 +382,9 @@ export function mockKiwi(username: string): KiwiApi {
       db.classifications.push(c);
       return clone(c);
     },
-    createProduct: async ({ name }) => {
+    createProduct: async ({ name, description }) => {
       if (db.products.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new Error(`Já existe um projeto chamado ${name}`);
-      const p = { id: db.seq++, name };
+      const p = { id: db.seq++, name, description: description ?? "" };
       db.products.push(p);
       return clone(p);
     },

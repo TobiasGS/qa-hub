@@ -1,6 +1,7 @@
 import "server-only";
 import { ApiError } from "./api";
 import type { KiwiApi, Product } from "./kiwi/types";
+import { ownerTag } from "./visibility";
 
 // "Projeto" no QA Hub = Product no Kiwi. O Kiwi exige versão em todo plano;
 // como o QA Hub não usa versões, cada projeto usa uma só, a "unspecified".
@@ -24,11 +25,12 @@ export async function planTypeId(kiwi: KiwiApi, kind: PlanKind): Promise<number>
   return found ? found.id : (await kiwi.createPlanType({ name })).id;
 }
 
-export async function createProject(kiwi: KiwiApi, name: string): Promise<Product> {
+/** Cria o projeto e grava o dono na description (o Kiwi não registra quem criou). */
+export async function createProject(kiwi: KiwiApi, name: string, owner: string): Promise<Product> {
   if ((await kiwi.products()).some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new ApiError(`Já existe um projeto chamado "${name}"`);
   const classifications = await kiwi.classifications();
   const classification = classifications.find((c) => c.name === "Projetos") ?? (await kiwi.createClassification({ name: "Projetos" }));
-  const product = await kiwi.createProduct({ name, classification: classification.id });
+  const product = await kiwi.createProduct({ name, classification: classification.id, description: ownerTag(owner) });
   // O Kiwi costuma criar versão e categoria padrão sozinho; garantimos caso não crie.
   await projectVersion(kiwi, product.id);
   if (!(await kiwi.categories({ product: product.id })).length) await kiwi.createCategory({ product: product.id, name: "--default--" });
