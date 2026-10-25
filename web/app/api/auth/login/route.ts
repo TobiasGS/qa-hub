@@ -14,10 +14,11 @@ export async function POST(req: Request) {
     const msg = e instanceof KiwiError && e.code !== undefined ? "Usuário ou senha inválidos" : `Não foi possível falar com o Kiwi: ${(e as Error).message}`;
     return NextResponse.json({ error: msg }, { status: 401 });
   }
-  session.username = username;
   // Perfil: id e se é superusuário (admin vê tudo; os demais, só o que é deles).
   const kiwi = isMock() ? mockKiwi(username) : realKiwi(session.kiwiSession!);
   const [me] = await kiwi.users({ username }).catch(() => []);
+  // O Kiwi aceita "tobias" para "Tobias"; guardamos o nome oficial para bater com autor/responsável.
+  session.username = me?.username ?? username;
   session.userId = me?.id;
   session.isAdmin = !!me?.is_superuser;
   await session.save();

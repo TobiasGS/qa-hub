@@ -26,6 +26,12 @@ export const projectOwner = (p: Product) => p.description?.match(OWNER)?.[1] ?? 
 
 export const seesAll = (v: Viewer) => v.isAdmin && v.scope === "all";
 
+/**
+ * Compara usuários sem diferenciar maiúsculas: o banco do Kiwi (MariaDB, collation *_ci)
+ * aceita "tobias" para "Tobias" no login e nos filtros, então o QA Hub precisa fazer o mesmo.
+ */
+export const sameUser = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
 /** null = sem filtro (admin vendo tudo). */
 export async function visibleSet(kiwi: KiwiApi, viewer: Viewer): Promise<Visible | null> {
   if (seesAll(viewer)) return null;
@@ -58,7 +64,7 @@ export async function visibleSet(kiwi: KiwiApi, viewer: Viewer): Promise<Visible
     runIds: new Set(runs.keys()),
     planIds,
     ownedPlanIds,
-    projectIds: new Set([...products.filter((p) => projectOwner(p) === u).map((p) => p.id), ...plans.map((p) => p.product)]),
+    projectIds: new Set([...products.filter((p) => sameUser(projectOwner(p), u)).map((p) => p.id), ...plans.map((p) => p.product)]),
     caseIds: new Set([...cases, ...ownCases].map((c) => c.id)),
   };
 }
@@ -69,7 +75,7 @@ export const canSeeCase = (vis: Visible | null, caseId: number) => vis === null 
 export const canSeeProject = (vis: Visible | null, projectId: number) => vis === null || vis.projectIds.has(projectId);
 
 /** Editar plano (dados, arquivar, casos, novos runs): autor ou admin. */
-export const canEditPlan = (viewer: Viewer, plan: Pick<TestPlan, "author__username">) => viewer.isAdmin || plan.author__username === viewer.username;
+export const canEditPlan = (viewer: Viewer, plan: Pick<TestPlan, "author__username">) => viewer.isAdmin || sameUser(plan.author__username, viewer.username);
 
 // ── Guardas para as rotas /api (404 quando não pode ver, 403 quando vê mas não pode mexer) ──
 
@@ -87,7 +93,7 @@ export async function requirePlanEditable(kiwi: KiwiApi, viewer: Viewer, planId:
 export async function requireCaseEditable(kiwi: KiwiApi, viewer: Viewer, caseId: number): Promise<TestCase> {
   const [testCase] = await kiwi.cases({ id: caseId });
   if (!testCase) throw new ApiError("Caso não encontrado", 404);
-  if (viewer.isAdmin || testCase.author__username === viewer.username) return testCase;
+  if (viewer.isAdmin || sameUser(testCase.author__username, viewer.username)) return testCase;
   const owned = await kiwi.plans({ cases: caseId, author__username: viewer.username });
   if (owned.length) return testCase;
   const vis = await visibleSet(kiwi, viewer);

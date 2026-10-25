@@ -49,13 +49,14 @@ export interface KiwiContext {
 }
 
 async function contextFrom(s: SessionData): Promise<KiwiContext> {
-  const username = s.username!;
+  let username = s.username!;
   const kiwi = isMock() ? mockKiwi(username) : realKiwi(s.kiwiSession!);
   let { userId, isAdmin } = s;
   if (userId === undefined || isAdmin === undefined) {
     const [me] = await kiwi.users({ username });
     userId = me?.id;
     isAdmin = !!me?.is_superuser;
+    username = me?.username ?? username; // nome oficial (o login aceita outra caixa)
   }
   const scope = (await cookies()).get(SCOPE_COOKIE)?.value === "mine" ? "mine" : "all";
   return { kiwi, username, viewer: { username, userId: userId ?? null, isAdmin: !!isAdmin, scope: isAdmin ? scope : "mine" } };

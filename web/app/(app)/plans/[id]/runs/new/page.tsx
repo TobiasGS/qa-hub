@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { RunForm } from "@/components/run-form";
 import { PageHeader } from "@/components/ui";
 import { requireKiwi } from "@/lib/session";
-import { canEditPlan } from "@/lib/visibility";
+import { canEditPlan, sameUser } from "@/lib/visibility";
 
 export default async function NewRunPage({ params }: { params: Promise<{ id: string }> }) {
   const { kiwi, username, viewer } = await requireKiwi();
@@ -12,7 +12,7 @@ export default async function NewRunPage({ params }: { params: Promise<{ id: str
   const [[plan], cases, users] = await Promise.all([kiwi.plans({ id }), kiwi.cases({ plan: id }), kiwi.users()]);
   if (!plan || !canEditPlan(viewer, plan)) notFound();
   const builds = await kiwi.builds({ version: plan.product_version });
-  const me = users.find((u) => u.username === username)?.id ?? null;
+  const me = users.find((u) => sameUser(u.username, username))?.id ?? null;
 
   return (
     <>
