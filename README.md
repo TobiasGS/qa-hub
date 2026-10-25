@@ -233,7 +233,22 @@ Tudo roda no Docker deste PC (`db`, `web` = Kiwi, `qa-hub`), com `restart: unles
    - `kiwi.seu-dominio.com` → Type `HTTPS` → URL `localhost:8443` → Additional application settings → TLS → **No TLS Verify** ligado.
 4. **Cloudflare, Access:** em Zero Trust → Access → Applications → Add → Self-hosted, crie uma aplicação para `qa.seu-dominio.com` e outra para `kiwi.seu-dominio.com`, cada uma com uma política **Allow** → Include → Emails → o seu e-mail. O login passa a ser por um código enviado ao e-mail.
 
-**No dia a dia:** ao ligar o PC, o Docker Desktop sobe sozinho, os containers voltam e o Tunnel reconecta. Com o PC desligado, o site fica fora do ar.
+**No dia a dia (depois de ligar o PC):**
+1. Entre no Windows normalmente.
+2. Na pasta do projeto, dê **dois cliques em `Iniciar QA Hub.cmd`**.
+3. Espere a janela mostrar **"Tudo no ar!"** (leva de 40 segundos a 2 minutos). O navegador abre sozinho no endereço público.
+
+O iniciador (`scripts\iniciar.ps1`) faz e confere quatro coisas:
+1. **Docker:** abre o Docker Desktop se ele estiver fechado.
+2. **Containers:** sobe o banco, o Kiwi e o QA Hub e espera os três ficarem saudáveis.
+3. **Tunnel:** confere o serviço `cloudflared` do Windows (ele já inicia sozinho com o PC).
+4. **Acesso:** testa o QA Hub no próprio PC e o endereço público. O endereço é lido de `QA_HUB_URL` no `web/.env.production.local`.
+
+Se algo der errado, a janela mostra `[!!]` com o que fazer. Com o PC desligado ou o Docker fechado, o site fica fora do ar.
+
+**Para não precisar nem do clique:** em Docker Desktop → *Settings* → *General*, ligue **Start Docker Desktop when you sign in**. Os containers voltam sozinhos quando o Docker abre, porque usam `restart: unless-stopped`.
+
+**Ao desligar o PC:** não precisa fazer nada; os dados ficam no banco (volume do Docker). Para parar tudo antes, rode `docker compose stop` na pasta do projeto.
 
 **Atualizar o QA Hub** depois de mudar o código:
 
