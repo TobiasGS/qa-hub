@@ -2,7 +2,7 @@
 
 import { Loader2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { send } from "@/lib/client-api";
 import type { CaseOptions } from "./case-form";
 import { Dialog } from "./dialog";
@@ -16,6 +16,18 @@ interface Proposed {
   selected: boolean;
 }
 
+interface JobView {
+  job: string;
+  status: "running" | "done" | "error";
+  story: { title: string };
+  elapsed: number;
+  cases?: Omit<Proposed, "selected">[];
+  error?: string;
+}
+
+/** Intervalo entre as consultas ao andamento da geração. */
+const POLL_MS = 3000;
+
 const KIND_STYLE: Record<Proposed["kind"], string> = { positivo: "bg-passed/15", negativo: "bg-failed/15", borda: "bg-blocked/15" };
 
 /** Liga a prioridade proposta (alta/média/baixa) às prioridades do Kiwi (ex.: P1..P5 ou Alta/Média/Baixa). */
@@ -27,6 +39,8 @@ function priorityId(options: CaseOptions, p: Proposed["priority"]) {
   return list[index]?.id;
 }
 
+const formatElapsed = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}min ${String(s % 60).padStart(2, "0")}s`);
+
 /** "Gerar casos da história": proposta do n8n → revisão → criação dos casos escolhidos. */
 export function GenerateCasesButton({ planId, cardKey, options }: { planId: number; cardKey: string; options: CaseOptions }) {
   const router = useRouter();
@@ -36,21 +50,43 @@ export function GenerateCasesButton({ planId, cardKey, options }: { planId: numb
   const [error, setError] = useState<string | null>(null);
   const [story, setStory] = useState<{ title: string } | null>(null);
   const [cases, setCases] = useState<Proposed[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  // Geração acompanhada agora; trocar (Gerar de novo) ou fechar o diálogo descarta a anterior.
+  const current = useRef(0);
+  useEffect(() => () => void current.current++, []);
 
+  /** Inicia a geração no servidor e consulta o andamento até terminar (a IA pode levar minutos). */
   async function generate() {
+    const run = ++current.current;
     setOpen(true);
     setLoading(true);
     setError(null);
     setCases([]);
+    setElapsed(0);
     try {
-      const r = await send<{ story: { title: string }; cases: Omit<Proposed, "selected">[] }>(`/api/plans/${planId}/generate-cases`, "POST");
+      let r = await send<JobView>(`/api/plans/${planId}/generate-cases`, "POST");
       setStory(r.story);
-      setCases(r.cases.map((c) => ({ ...c, selected: true })));
+      while (r.status === "running") {
+        await new Promise((ok) => setTimeout(ok, POLL_MS));
+        if (run !== current.current) return;
+        r = await send<JobView>(`/api/plans/${planId}/generate-cases?job=${r.job}`, "GET");
+        setElapsed(r.elapsed);
+      }
+      if (run !== current.current) return;
+      if (r.status === "error") throw new Error(r.error);
+      setCases((r.cases ?? []).map((c) => ({ ...c, selected: true })));
     } catch (e) {
-      setError((e as Error).message);
+      if (run === current.current) setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (run === current.current) setLoading(false);
     }
+  }
+
+  function close() {
+    if (saving) return;
+    current.current++; // para de acompanhar; o que já estava gerando é descartado
+    setLoading(false);
+    setOpen(false);
   }
 
   const update = (i: number, patch: Partial<Proposed>) => setCases((list) => list.map((c, j) => (j === i ? { ...c, ...patch } : c)));
@@ -90,13 +126,26 @@ export function GenerateCasesButton({ planId, cardKey, options }: { planId: numb
       <Button onClick={generate} title={`Gera uma proposta de casos a partir da história ${cardKey} (via n8n)`}>
         <Sparkles className="size-4" /> Gerar casos da história
       </Button>
-      <Dialog open={open} onClose={() => !saving && setOpen(false)} title="Gerar casos da história" description={story ? `${cardKey} · ${story.title}` : cardKey} wide>
+      <Dialog open={open} onClose={close} title="Gerar casos da história" description={story ? `${cardKey} · ${story.title}` : cardKey} wide>
         {loading && (
-          <p className="flex items-center gap-2 py-6 text-sm text-fg-2">
-            <Loader2 className="size-4 animate-spin" /> Lendo a história no Azure e gerando os casos no n8n… isso pode levar até 2 minutos.
-          </p>
+          <div className="py-6 text-sm text-fg-2">
+            <p className="flex items-center gap-2">
+              <Loader2 className="size-4 animate-spin" /> Gerando os casos a partir da história no n8n…
+              {elapsed > 0 && <span className="tabular text-muted">{formatElapsed(elapsed)}</span>}
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              {elapsed < 60
+                ? "Costuma levar menos de um minuto."
+                : "A IA está demorando (quando o Google está sobrecarregado, o n8n tenta de novo e usa o modelo reserva). Pode levar alguns minutos; deixe esta janela aberta."}
+            </p>
+          </div>
         )}
         {error && <p className="mb-3 rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed">{error}</p>}
+        {error && !loading && cases.length === 0 && (
+          <Button onClick={generate}>
+            <Sparkles className="size-4" /> Tentar de novo
+          </Button>
+        )}
         {!loading && cases.length > 0 && (
           <>
             <p className="mb-3 text-sm text-fg-2">

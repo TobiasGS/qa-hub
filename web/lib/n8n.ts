@@ -19,7 +19,8 @@ export interface GeneratedCase {
   gherkin: string;
 }
 
-const PRIORITIES = ["alta", "média", "baixa"] as const;
+const TIMEOUT_MS = 10 * 60_000;
+const PRIORITIES =["alta", "média", "baixa"] as const;
 const KINDS = ["positivo", "negativo", "borda"] as const;
 const norm = (s: unknown) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -52,18 +53,20 @@ export async function generateCasesViaN8n(payload: StoryPayload): Promise<Genera
       headers: { "Content-Type": "application/json", "X-QAHub-Secret": secret },
       body: JSON.stringify(payload),
       cache: "no-store",
-      // Modelos de raciocínio (ex.: DeepSeek R1) podem levar mais de um minuto.
-      signal: AbortSignal.timeout(150_000),
+      // Roda em segundo plano (lib/generation-jobs.ts): com a IA sobrecarregada, as
+      // novas tentativas do workflow podem passar de 5 minutos.
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {
     const err = e as Error;
-    if (err.name === "TimeoutError") throw new ApiError("O n8n demorou demais para responder (mais de 2,5 min). Tente de novo ou use um modelo mais rápido no workflow.", 504);
+    if (err.name === "TimeoutError") throw new ApiError(`O n8n não respondeu em ${TIMEOUT_MS / 60_000} minutos. A IA pode estar sobrecarregada: tente de novo mais tarde.`, 504);
     throw new ApiError("Não consegui falar com o n8n. Ele está ligado? Rode o \"Iniciar QA Hub.cmd\" ou abra o n8n.", 502);
   }
   if (res.status === 401 || res.status === 403) throw new ApiError("O n8n recusou o acesso: o segredo do webhook não confere (N8N_WEBHOOK_SECRET × credencial Header Auth).", 502);
   if (res.status === 404) throw new ApiError("Webhook não encontrado no n8n: importe e ATIVE o workflow \"QA Hub · Gerar casos da história\".", 502);
   const text = await res.text();
-  if (!res.ok) throw new ApiError(`O n8n respondeu ${res.status}: ${text.slice(0, 200)}`, 502);
+  if (res.status === 500) throw new ApiError("O workflow do n8n falhou, em geral porque a IA está indisponível ou sobrecarregada. Tente de novo em alguns minutos; o detalhe fica em Executions, no n8n.", 502);
+  if (!res.ok)throw new ApiError(`O n8n respondeu ${res.status}: ${text.slice(0, 200)}`, 502);
   let data: unknown;
   try {
     data = JSON.parse(text);
