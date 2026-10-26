@@ -9,7 +9,7 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "2ef2db0c-bec5-49f7-a905-2af4af32fcf4",
+      "id": "8c03d13f-dcc7-4185-9bae-3384a37fd279",
       "name": "Webhook (QA Hub)",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -17,43 +17,67 @@
         0,
         0
       ],
-      "webhookId": "da491cf6-5df1-40a1-9ba1-c3162a97cca3",
+      "webhookId": "6d6f73d4-55e4-45dd-bc14-c5794c8cc70d",
       "notes": "Crie uma credencial Header Auth com Name = X-QAHub-Secret e Value = o N8N_WEBHOOK_SECRET do QA Hub."
     },
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Você é um analista de QA sênior. Escreva casos de teste para a história abaixo.\n\nHistória {{ $json.body.story.key }}: {{ $json.body.story.title }}\n\nDescrição:\n{{ $json.body.story.description || '(sem descrição)' }}\n\nCritérios de aceite:\n{{ $json.body.story.acceptanceCriteria || '(sem critérios de aceite)' }}\n\nCasos que JÁ existem no plano (não repita): {{ JSON.stringify($json.body.existingCases || []) }}\n\nRegras:\n- Escreva em português do Brasil, no formato Gherkin (Cenário / Dado / Quando / Então / E).\n- Cubra cada critério de aceite e inclua casos negativos e de borda relevantes.\n- Gere entre 3 e 10 casos, sem duplicar os que já existem.\n- \"priority\" deve ser \"alta\", \"média\" ou \"baixa\"; \"kind\" deve ser \"positivo\", \"negativo\" ou \"borda\".\n- Responda APENAS com JSON válido, sem texto antes ou depois, neste formato:\n{\"cases\":[{\"title\":\"...\",\"priority\":\"alta\",\"kind\":\"positivo\",\"gherkin\":\"Cenário: ...\\n  Dado ...\\n  Quando ...\\n  Então ...\"}]}\n"
+        "text": "=Você é um analista de QA sênior. Escreva casos de teste para a história abaixo.\n\nHistória {{ $json.body.story.key }}: {{ $json.body.story.title }}\n\nDescrição:\n{{ $json.body.story.description || '(sem descrição)' }}\n\nCritérios de aceite:\n{{ $json.body.story.acceptanceCriteria || '(sem critérios de aceite)' }}\n\nCasos que JÁ existem no plano (não repita): {{ JSON.stringify($json.body.existingCases || []) }}\n\nRegras:\n- Escreva em português do Brasil, no formato Gherkin (Cenário / Dado / Quando / Então / E).\n- Cubra cada critério de aceite e inclua casos negativos e de borda relevantes.\n- Gere entre 3 e 10 casos, sem duplicar os que já existem.\n- \"priority\" deve ser \"alta\", \"média\" ou \"baixa\"; \"kind\" deve ser \"positivo\", \"negativo\" ou \"borda\".\n- Responda APENAS com JSON válido, sem texto antes ou depois, neste formato:\n{\"cases\":[{\"title\":\"...\",\"priority\":\"alta\",\"kind\":\"positivo\",\"gherkin\":\"Cenário: ...\\n  Dado ...\\n  Quando ...\\n  Então ...\"}]}\n",
+        "hasOutputParser": false,
+        "needsFallback": true
       },
-      "id": "1df50e41-74db-4c99-ae6f-7e92ccd0fa32",
+      "id": "b33f0cd8-fd8d-4845-a027-20efce357fa9",
       "name": "Gerar casos (IA)",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "typeVersion": 1.4,
+      "typeVersion": 1.7,
       "position": [
         260,
         0
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
-        "model": "deepseek/deepseek-r1:free",
-        "options": {}
+        "modelName": "models/gemini-3.8-flash",
+        "options": {
+          "temperature": 0.3
+        }
       },
-      "id": "85d12b99-1bbb-483b-9ea7-51f4ad966936",
-      "name": "OpenRouter Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "id": "df7758d2-d914-4568-80c1-2c820aebf4d1",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
         260,
         220
       ],
-      "notes": "Escolha a credencial OpenRouter. Pode trocar o modelo (ou o nó inteiro por Anthropic, OpenAI, Gemini…)."
+      "notes": "Escolha a credencial do Google Gemini. Pode trocar o modelo (ou o nó inteiro por Anthropic, OpenAI, OpenRouter…)."
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "9f155294-2b00-47ae-bed2-e6be965da980",
+      "name": "Google Gemini (reserva)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        420,
+        220
+      ],
+      "notes": "Modelo reserva: usado quando o principal falha (ex.: 503 por excesso de demanda)."
     },
     {
       "parameters": {
         "jsCode": "// Extrai o JSON dos casos da resposta da IA (modelos de raciocínio, como o DeepSeek R1,\n// escrevem um bloco <think> antes) e normaliza para o contrato do QA Hub.\nconst out = $input.first().json;\nlet text = String(out.text ?? out.output ?? out.response ?? '');\ntext = text.replace(/<think>[\\s\\S]*?<\\/think>/gi, '').replace(/```(?:json)?/gi, '').trim();\nconst start = text.indexOf('{');\nconst end = text.lastIndexOf('}');\nif (start < 0 || end <= start) throw new Error('A IA não devolveu JSON: ' + text.slice(0, 200));\n// Modelos às vezes quebram linha \"de verdade\" dentro das strings do JSON: escapa.\nlet json = '', inString = false, escaped = false;\nfor (const ch of text.slice(start, end + 1)) {\n  if (inString && !escaped && (ch === '\\n' || ch === '\\r' || ch === '\\t')) {\n    json += ch === '\\n' ? '\\\\n' : ch === '\\r' ? '' : '\\\\t';\n    continue;\n  }\n  if (ch === '\"' && !escaped) inString = !inString;\n  escaped = ch === '\\\\' && !escaped;\n  json += ch;\n}\nlet data;\ntry {\n  data = JSON.parse(json);\n} catch (e) {\n  throw new Error('JSON inválido na resposta da IA: ' + e.message);\n}\nconst list = Array.isArray(data) ? data : (data.cases || []);\nconst cases = list\n  .filter((c) => c && c.title && (c.gherkin || c.steps))\n  .map((c) => ({\n    title: String(c.title).trim(),\n    priority: String(c.priority || 'média').toLowerCase(),\n    kind: String(c.kind || 'positivo').toLowerCase(),\n    gherkin: String(c.gherkin || c.steps).trim(),\n  }));\nif (!cases.length) throw new Error('Nenhum caso válido na resposta da IA');\nreturn [{ json: { cases } }];\n"
       },
-      "id": "b023a68f-135e-497e-b65e-d1850e176d3b",
+      "id": "4fc8d8ef-1a1b-4ac4-a07a-9097fc0527f7",
       "name": "Extrair JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -67,7 +91,7 @@
         "respondWith": "firstIncomingItem",
         "options": {}
       },
-      "id": "ad69ef90-dbe4-44b8-8b11-c77639ffb7d7",
+      "id": "05dada10-0c48-4f72-8e84-13e198b32cfb",
       "name": "Responder ao QA Hub",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
@@ -89,13 +113,24 @@
         ]
       ]
     },
-    "OpenRouter Chat Model": {
+    "Google Gemini Chat Model": {
       "ai_languageModel": [
         [
           {
             "node": "Gerar casos (IA)",
             "type": "ai_languageModel",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini (reserva)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Gerar casos (IA)",
+            "type": "ai_languageModel",
+            "index": 1
           }
         ]
       ]

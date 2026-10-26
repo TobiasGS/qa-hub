@@ -206,8 +206,8 @@ Na página de um plano com card do Azure, o botão **Gerar casos da história** 
 **Para ligar (uma vez):**
 1. Abra o n8n (`http://localhost:5678`) → **Import from File** → `n8n/qahub-gerar-casos.workflow.json`.
 2. No nó **Webhook (QA Hub)**, crie uma credencial **Header Auth** com Name `X-QAHub-Secret` e Value igual ao `N8N_WEBHOOK_SECRET` do `web/.env.production.local` (e do `.env.local`, em dev).
-3. No nó **OpenRouter Chat Model**, escolha a sua credencial. O modelo padrão é `deepseek/deepseek-r1:free`; dá para trocar o modelo ou o nó inteiro por outro provedor de IA.
-4. **Ative** o workflow (chave *Active*). Sem isso, o webhook responde 404 e o QA Hub avisa.
+3. Nos nós **Google Gemini Chat Model** e **Google Gemini (reserva)**, escolha a sua credencial do Gemini. O principal é `models/gemini-3.8-flash`; se ele falhar (o Google às vezes responde 503 por excesso de demanda), o nó tenta 3 vezes e usa o reserva, `models/gemini-3.5-flash`. Dá para trocar os modelos ou o provedor de IA.
+4. **Publique** o workflow (botão *Publish*). Sem isso, o webhook responde 404 e o QA Hub avisa. Cada alteração no workflow só vale depois de publicar de novo.
 
 `N8N_WEBHOOK_URL` aponta para `http://localhost:5678/webhook/qahub-gerar-casos` em dev e para `http://host.docker.internal:5678/webhook/qahub-gerar-casos` no container (o compose já mapeia `host.docker.internal`). O iniciador sobe o n8n junto. Se `n8n.seu-dominio.com` também estiver publicado no Tunnel, proteja-o com o Cloudflare Access: o QA Hub não precisa dele, porque chama o n8n por dentro do PC.
 
