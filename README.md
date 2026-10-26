@@ -16,7 +16,7 @@ navegador ──► QA Hub (Next.js, qa.seu-dominio.com)
 - **Planos:** organizados em seções por **projeto** (com filtro); criar com Projeto (ou "+ Projeto"), Tipo Manual/Automatizado e card do épico/feature; editar, arquivar e restaurar. Com card do Azure, o plano ganha uma **tarefa "Plano de Teste"** no card, com o estado acompanhando os runs.
 - **Casos:** criar, editar, desativar e remover do plano, cada um ligado a um ou mais cards do Jira/Azure (`jira-101, azure-55`); **Gerar casos da história** propõe os casos (Dado/Quando/Então) a partir do card do Azure, via n8n.
 - **Runs:**
-  - criar a partir do plano, escolhendo build (ou criando uma nova), casos e quem testa cada um;
+  - criar a partir do plano: a build já vem preenchida com a seguinte à do último run (`1` → `2`, `1.0.0` → `1.0.1`), editável; o título é automático (`<plano> — build <n>`); escolha os casos e quem testa cada um;
   - **Re-testar falhas**, que cria um run só com o que falhou ou ficou bloqueado;
   - filtros por plano, build e situação;
   - o run é **concluído sozinho** quando não sobra caso pendente, e reabre se algum voltar a pendente.
@@ -192,10 +192,10 @@ O estado da tarefa acompanha o **run mais recente** do plano:
 | Evento | Estado |
 | --- | --- |
 | run criado (ou re-teste, ou run reaberto) | **Em Teste** |
-| run concluído com tudo passou | **Testado** |
+| run concluído com tudo passou | **Concluído** |
 | run concluído com alguma falha ou bloqueio | **Teste Recusado** |
 
-Os nomes vêm do processo do Azure e podem ser trocados com `AZURE_STATE_TESTING`, `AZURE_STATE_PASSED` e `AZURE_STATE_FAILED`. Uma falha no Azure nunca impede criar o plano ou registrar um resultado: vira um aviso na tela (criação) ou uma linha no log (estado). Renomear o plano renomeia a tarefa; arquivar o plano não mexe nela.
+Os nomes vêm do processo do Azure e podem ser trocados com `AZURE_STATE_TESTING`, `AZURE_STATE_PASSED` e `AZURE_STATE_FAILED`. Ao fechar a tarefa (Concluído ou Teste Recusado), o QA Hub preenche o **Completed Work** com as horas de teste do plano (soma do tempo do cronômetro de todos os runs, mínimo 0,25 h), porque o processo exige esse campo para fechar a Tarefa. Outro processo pode usar outro campo: `AZURE_COMPLETED_WORK_FIELD`. Uma falha no Azure nunca impede criar o plano ou registrar um resultado: vira um aviso na tela (criação) ou uma linha no log (estado). Renomear o plano renomeia a tarefa; arquivar o plano não mexe nela.
 
 **Run concluído:** quando o último caso pendente recebe resultado, o run ganha data de conclusão (`stop_date`) e sai de "Em andamento". Se um caso voltar a pendente, o run reabre sozinho.
 

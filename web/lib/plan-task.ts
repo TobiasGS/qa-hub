@@ -13,9 +13,15 @@ const tagOf = (taskId: number, cardId: number) => `qahub-azure-task:${taskId}@${
 /** Estados da Tarefa no fluxo da empresa (configuráveis, para outros processos). */
 export const TASK_STATES = {
   testing: process.env.AZURE_STATE_TESTING ?? "Em Teste",
-  passed: process.env.AZURE_STATE_PASSED ?? "Testado",
+  passed: process.env.AZURE_STATE_PASSED ?? "Concluído",
   failed: process.env.AZURE_STATE_FAILED ?? "Teste Recusado",
 };
+
+/**
+ * Horas trabalhadas na tarefa. O processo da empresa exige esse campo para fechar a
+ * Tarefa (TF401320 "Completed Work: Required"); o QA Hub envia o tempo medido nos runs.
+ */
+export const COMPLETED_WORK_FIELD = process.env.AZURE_COMPLETED_WORK_FIELD ?? "Microsoft.VSTS.Scheduling.CompletedWork";
 
 export interface PlanTask {
   taskId: number;
@@ -87,9 +93,11 @@ export async function renamePlanTask(kiwi: KiwiApi, plan: TestPlan): Promise<voi
   if (task && azureConfig()) await updateWorkItem(task.taskId, { title: `Plano de Teste: ${plan.name}` }).catch((e) => console.error("[plan-task] renomear:", e.message));
 }
 
-/** Move a tarefa do plano para um estado. Erros só vão para o log (não bloqueiam a execução dos testes). */
-export async function setPlanTaskState(kiwi: KiwiApi, planId: number, state: string): Promise<void> {
+/** Move a tarefa do plano para um estado (com campos extras, ex.: horas). Erros só vão para o log (não bloqueiam a execução dos testes). */
+export async function setPlanTaskState(kiwi: KiwiApi, planId: number, state: string, fields?: Record<string, string | number>): Promise<void> {
   const task = await planTask(kiwi, planId);
   if (!task || !azureConfig()) return;
-  await updateWorkItem(task.taskId, { state }).catch((e) => console.error(`[plan-task] estado "${state}" na tarefa ${task.taskId}:`, e.message));
+  await updateWorkItem(task.taskId, { state, fields }).catch((e) =>
+    console.error(`[plan-task] estado "${state}" na tarefa ${task.taskId}${fields ? ` (campos: ${JSON.stringify(fields)})` : ""}:`, e.message),
+  );
 }

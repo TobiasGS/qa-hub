@@ -1,8 +1,8 @@
 import "server-only";
 import type { KiwiApi } from "./kiwi/types";
 import { outcomeOf } from "./metrics";
-import { setPlanTaskState, TASK_STATES } from "./plan-task";
-import { kiwiDate } from "./timer";
+import { COMPLETED_WORK_FIELD, setPlanTaskState, TASK_STATES } from "./plan-task";
+import { durationOf, kiwiDate } from "./timer";
 
 // Estado do run: concluído quando nenhum caso está pendente, reaberto se algum
 // voltar a pendente. A tarefa "Plano de Teste" no Azure acompanha o run mais
@@ -12,6 +12,14 @@ import { kiwiDate } from "./timer";
 async function isLatestRun(kiwi: KiwiApi, planId: number, runId: number) {
   const runs = await kiwi.runs({ plan: planId });
   return runs.every((r) => r.id <= runId);
+}
+
+/** Horas de teste do plano: soma do tempo efetivo de todas as execuções de todos os runs (mínimo 0,25 h). */
+async function planHours(kiwi: KiwiApi, planId: number): Promise<number> {
+  const runs = await kiwi.runs({ plan: planId });
+  const executions = runs.length ? await kiwi.executions({ run__in: runs.map((r) => r.id) }) : [];
+  const seconds = executions.reduce((sum, e) => sum + (durationOf(e) ?? 0), 0);
+  return Math.max(0.25, Math.round((seconds / 3600) * 100) / 100);
 }
 
 /** Run novo ou re-teste: a tarefa do plano vai para "Em Teste". */
@@ -33,7 +41,7 @@ export async function syncRunState(kiwi: KiwiApi, runId: number): Promise<"close
     await kiwi.updateRun(runId, { stop_date: kiwiDate(new Date()) });
     if (await isLatestRun(kiwi, run.plan, runId)) {
       const failed = outcomes.some((o) => o === "failed" || o === "blocked");
-      await setPlanTaskState(kiwi, run.plan, failed ? TASK_STATES.failed : TASK_STATES.passed);
+      await setPlanTaskState(kiwi, run.plan, failed ? TASK_STATES.failed : TASK_STATES.passed, { [COMPLETED_WORK_FIELD]: await planHours(kiwi, run.plan) });
     }
     return "closed";
   }

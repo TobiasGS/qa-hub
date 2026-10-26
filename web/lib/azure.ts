@@ -141,11 +141,12 @@ export async function createChildWorkItem(item: {
   return { id: created.id, url: workItemHtmlUrl(cfg.base, created.id) };
 }
 
-/** Atualiza título e/ou estado de um work item. */
-export async function updateWorkItem(id: number, values: { title?: string; state?: string }): Promise<void> {
+/** Atualiza título, estado e/ou outros campos de um work item. */
+export async function updateWorkItem(id: number, values: { title?: string; state?: string; fields?: Record<string, string | number> }): Promise<void> {
   const ops = [
     ...(values.title !== undefined ? [add("/fields/System.Title", values.title)] : []),
     ...(values.state !== undefined ? [add("/fields/System.State", values.state)] : []),
+    ...Object.entries(values.fields ?? {}).map(([field, value]) => add(`/fields/${field}`, value)),
   ];
   if (ops.length) await call(`wit/workitems/${id}`, { method: "PATCH", body: ops, contentType: "application/json-patch+json" });
 }

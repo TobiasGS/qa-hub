@@ -8,15 +8,30 @@ import { send } from "@/lib/client-api";
 import { Field, FormFooter, Select, TextInput } from "./form";
 import { Badge, Card, cn, inputStyles } from "./ui";
 
-const NEW_BUILD = "__new";
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-export function RunForm({ plan, cases, builds, users, me }: { plan: TestPlan; cases: TestCase[]; builds: Build[]; users: User[]; me: number | null }) {
+export function RunForm({
+  plan,
+  cases,
+  builds,
+  users,
+  me,
+  suggestedBuild,
+}: {
+  plan: TestPlan;
+  cases: TestCase[];
+  builds: Build[];
+  users: User[];
+  me: number | null;
+  /** Build seguinte à do último run do plano (1 → 2, 1.0.0 → 1.0.1). */
+  suggestedBuild: string;
+}) {
   const router = useRouter();
   const sortedBuilds = [...builds].sort((a, b) => b.id - a.id);
-  const [build, setBuild] = useState(sortedBuilds[0] ? String(sortedBuilds[0].id) : NEW_BUILD);
-  const [newBuild, setNewBuild] = useState("");
-  const buildName = build === NEW_BUILD ? newBuild : (sortedBuilds.find((b) => String(b.id) === build)?.name ?? "");
-  const [summary, setSummary] = useState("");
+  const [buildName, setBuildName] = useState(suggestedBuild);
+  // Build com esse nome já existe no projeto? Então é reaproveitada; senão, é criada.
+  const existingBuild = sortedBuilds.find((b) => sameName(b.name, buildName));
+  const summary = `${plan.name} — build ${buildName.trim()}`;
   const [tester, setTester] = useState(me ? String(me) : "");
   const [selected, setSelected] = useState<Set<number>>(new Set(cases.map((c) => c.id)));
   const [assignees, setAssignees] = useState<Record<number, string>>({});
@@ -62,9 +77,9 @@ export function RunForm({ plan, cases, builds, users, me }: { plan: TestPlan; ca
     try {
       const { run } = await send<{ run: TestRun }>("/api/runs", "POST", {
         plan: plan.id,
-        build: build === NEW_BUILD ? undefined : Number(build),
-        newBuild: build === NEW_BUILD ? newBuild : undefined,
-        summary: summary.trim() || `${plan.name} — ${buildName}`,
+        build: existingBuild?.id,
+        newBuild: existingBuild ? undefined : buildName.trim(),
+        summary: summary.slice(0, 255),
         default_tester: tester ? Number(tester) : null,
         cases: cases.filter((c) => selected.has(c.id)).map((c) => ({ id: c.id, assignee: assignees[c.id] ? Number(assignees[c.id]) : null })),
       });
@@ -78,21 +93,20 @@ export function RunForm({ plan, cases, builds, users, me }: { plan: TestPlan; ca
   return (
     <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[340px_1fr]">
       <Card className="h-fit space-y-4 p-5">
-        <Field label="Build">
-          <Select
-            value={build}
-            onChange={(e) => setBuild(e.target.value)}
-            options={[...sortedBuilds.map((b) => ({ value: String(b.id), label: b.name })), { value: NEW_BUILD, label: "+ Nova build…" }]}
-          />
+        <Field
+          label="Build"
+          hint={existingBuild ? `Build já existente no projeto ${plan.product__name}.` : `Nova build no projeto ${plan.product__name} (a seguinte à do último run).`}
+        >
+          <TextInput value={buildName} onChange={(e) => setBuildName(e.target.value)} required maxLength={255} list="run-builds" placeholder="Ex.: 2" />
+          <datalist id="run-builds">
+            {sortedBuilds.map((b) => (
+              <option key={b.id} value={b.name} />
+            ))}
+          </datalist>
         </Field>
-        {build === NEW_BUILD && (
-          <Field label="Nome da nova build" hint={`Projeto ${plan.product__name}`}>
-            <TextInput value={newBuild} onChange={(e) => setNewBuild(e.target.value)} required placeholder="Ex.: 1.9.0-rc1" autoFocus />
-          </Field>
-        )}
-        <Field label="Título do run">
-          <TextInput value={summary} onChange={(e) => setSummary(e.target.value)} placeholder={`${plan.name} — ${buildName || "build"}`} maxLength={255} />
-        </Field>
+        <p className="text-xs text-muted">
+          Título do run: <b className="text-fg-2">{summary}</b>
+        </p>
         <Field label="Testador padrão" hint="Quem recebe os casos sem responsável próprio.">
           <Select value={tester} onChange={(e) => setTester(e.target.value)} options={[{ value: "", label: "Ninguém" }, ...userOptions]} />
         </Field>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RunForm } from "@/components/run-form";
 import { PageHeader } from "@/components/ui";
+import { nextBuildName } from "@/lib/builds";
 import { requireKiwi } from "@/lib/session";
 import { canEditPlan, sameUser } from "@/lib/visibility";
 
@@ -11,7 +12,11 @@ export default async function NewRunPage({ params }: { params: Promise<{ id: str
   const id = Number((await params).id);
   const [[plan], cases, users] = await Promise.all([kiwi.plans({ id }), kiwi.cases({ plan: id }), kiwi.users()]);
   if (!plan || !canEditPlan(viewer, plan)) notFound();
-  const builds = await kiwi.builds({ version: plan.product_version });
+  const [builds, runs] = await Promise.all([kiwi.builds({ version: plan.product_version }), kiwi.runs({ plan: id })]);
+  // Próxima build: a seguinte à do último run do plano; sem run, a seguinte à mais recente do projeto.
+  const lastRun = [...runs].sort((a, b) => b.id - a.id)[0];
+  const lastProjectBuild = builds.filter((b) => b.name !== "unspecified").sort((a, b) => b.id - a.id)[0];
+  const suggestedBuild = nextBuildName(lastRun?.build__name ?? lastProjectBuild?.name);
   const me = users.find((u) => sameUser(u.username, username))?.id ?? null;
 
   return (
@@ -20,7 +25,7 @@ export default async function NewRunPage({ params }: { params: Promise<{ id: str
         <ArrowLeft className="size-3.5" /> {plan.name}
       </Link>
       <div className="mt-1">
-        <PageHeader title="Novo run" description="Escolha a build, os casos e quem testa cada um." />
+        <PageHeader title="Novo run" description="Confira a build, escolha os casos e quem testa cada um." />
       </div>
       <RunForm
         plan={plan}
@@ -28,6 +33,7 @@ export default async function NewRunPage({ params }: { params: Promise<{ id: str
         builds={builds.filter((b) => b.is_active)}
         users={users.filter((u) => u.username !== "ci-bot")}
         me={me}
+        suggestedBuild={suggestedBuild}
       />
     </>
   );
