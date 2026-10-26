@@ -5,7 +5,8 @@ import { isMock } from "@/lib/session";
 // KIWI_MODE é lido na hora do request, não no build.
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ expirou?: string }> }) {
+  const expired = (await searchParams).expirou === "1";
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -17,6 +18,7 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-fg-2">
             {isMock() ? "Modo de exemplo: qualquer usuário entra, sem senha." : "Use seu usuário e senha do Kiwi TCMS."}
           </p>
+          {expired && <p className="mt-3 rounded-lg bg-blocked/15 px-3 py-2 text-sm">Sua sessão expirou. Entre de novo para continuar.</p>}
           <LoginForm mock={isMock()} />
         </div>
       </div>

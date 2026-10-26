@@ -11,6 +11,12 @@ export class KiwiError extends Error {
   }
 }
 
+/**
+ * O Kiwi não aceita mais a sessão (expirou, a senha ou o cadastro mudou, logout pelo Kiwi):
+ * o QA Hub precisa pedir login de novo em vez de quebrar a página.
+ */
+export const isKiwiAuthError = (e: unknown) => e instanceof KiwiError && (e.code === -32098 || /authentication failed/i.test(e.message));
+
 function kiwiUrl() {
   const url = process.env.KIWI_URL;
   if (!url) throw new KiwiError("KIWI_URL não definido (veja web/.env.example)");

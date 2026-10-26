@@ -1,5 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { isKiwiAuthError } from "./kiwi/rpc";
 import type { User } from "./kiwi/types";
 import { kiwiForApi, type KiwiContext } from "./session";
 
@@ -30,6 +31,7 @@ export function apiRoute<P extends Record<string, string | string[]> = Record<st
       const result = await handler(ctx, req, await params);
       return result instanceof Response ? result : NextResponse.json(result ?? { ok: true });
     } catch (e) {
+      if (isKiwiAuthError(e)) return NextResponse.json({ error: "Sessão expirada, entre de novo" }, { status: 401 });
       const status = e instanceof ApiError ? e.status : 502;
       return NextResponse.json({ error: (e as Error).message }, { status });
     }

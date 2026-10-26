@@ -5,6 +5,11 @@ export async function send<T = Record<string, unknown>>(url: string, method: str
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  // Sessão expirada (no QA Hub ou no Kiwi): volta para o login em vez de mostrar erro.
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login?expirou=1";
+    return new Promise<T>(() => {});
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? `Erro ${res.status}`);
   return data as T;
