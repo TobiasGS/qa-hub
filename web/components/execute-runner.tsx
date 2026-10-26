@@ -1,12 +1,13 @@
 "use client";
 
-import { ArrowLeft, Ban, Bug, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Loader2, XCircle } from "lucide-react";
+import { ArrowLeft, Ban, Bug, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Loader2, MessageSquare, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isEvidence } from "@/lib/evidence/shared";
-import type { ExecutionStatus, LinkReference, TestExecution, TestRun } from "@/lib/kiwi/types";
+import type { Comment, ExecutionStatus, LinkReference, TestExecution, TestRun } from "@/lib/kiwi/types";
 import { outcomeOf, summarize, type Outcome } from "@/lib/metrics";
 import { send } from "@/lib/client-api";
+import { parseKiwiDate } from "@/lib/timer";
 import { BugDialog } from "./bug-dialog";
 import { CaseHistory } from "./case-history";
 import { EvidencePanel } from "./evidence-panel";
@@ -38,6 +39,7 @@ const STATUS_LABEL: Record<string, string> = {
   WAIVED: "Dispensado",
 };
 const statusLabel = (name: string) => STATUS_LABEL[name] ?? name;
+const commentTime = (iso: string) => new Date(parseKiwiDate(iso)).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 /** O texto do caso no Kiwi é Markdown; aqui só o negrito é renderizado, o resto fica como texto. */
 function SimpleMarkdown({ text }: { text: string }) {
@@ -68,7 +70,13 @@ export function ExecuteRunner(props: {
   const [index, setIndex] = useState(
     props.initialIndex !== undefined && props.initialIndex >= 0 && props.initialIndex < executions.length ? props.initialIndex : Math.max(0, firstPending),
   );
-  const [comment, setComment] = useState("");
+  // Comentário em edição de cada execução: trocar de caso não apaga o que foi escrito.
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  // Comentários já gravados no Kiwi, por execução (carregados ao abrir o caso).
+  const [saved, setSaved] = useState<Record<number, Comment[]>>({});
+  const [savingComment, setSavingComment] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [manualBug, setManualBug] = useState(false);
@@ -77,6 +85,8 @@ export function ExecuteRunner(props: {
   const listRef = useRef<HTMLUListElement>(null);
 
   const current = executions[index];
+  const comment = current ? (drafts[current.id] ?? "") : "";
+  const setComment = (text: string) => current && setDrafts((d) => ({ ...d, [current.id]: text }));
   const info = props.cases.find((c) => c.id === current?.case);
   const outcome = current ? outcomeOf(current.status, statuses) : "pending";
   const currentBugs = links.filter((l) => l.execution === current?.id && l.is_defect);
@@ -86,13 +96,41 @@ export function ExecuteRunner(props: {
   const [bugOpen, setBugOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const loadComments = useCallback(async (executionId: number) => {
+    const { comments } = await send<{ comments: Comment[] }>(`/api/executions/${executionId}/comments`, "GET");
+    setSaved((s) => ({ ...s, [executionId]: comments }));
+  }, []);
+
+  /** Grava o comentário em edição da execução (sem mudar o resultado). */
+  const saveComment = useCallback(async (executionId: number) => {
+    const text = draftsRef.current[executionId]?.trim();
+    if (!text) return;
+    setSavingComment(true);
+    try {
+      const { comments } = await send<{ comments: Comment[] }>(`/api/executions/${executionId}/comments`, "POST", { comment: text });
+      setSaved((s) => ({ ...s, [executionId]: comments }));
+      // Só limpa se ninguém escreveu mais nada enquanto gravava.
+      setDrafts((d) => (d[executionId]?.trim() === text ? { ...d, [executionId]: "" } : d));
+    } catch (e) {
+      setError(`O comentário não foi salvo: ${(e as Error).message}`);
+    } finally {
+      setSavingComment(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (current && !saved[current.id]) loadComments(current.id).catch(() => {});
+  }, [current, saved, loadComments]);
+
   const go = useCallback(
     (i: number) => {
+      // Ao sair do caso, o comentário escrito é salvo (o anexo já é salvo na hora).
+      if (current && draftsRef.current[current.id]?.trim()) saveComment(current.id);
       setIndex(Math.min(Math.max(i, 0), executions.length - 1));
       setError(null);
       setManualBug(false);
     },
-    [executions.length],
+    [current, executions.length, saveComment],
   );
 
   useEffect(() => {
@@ -120,7 +158,12 @@ export function ExecuteRunner(props: {
         else if (body.run === "reopened") setNotice("Run reaberto: há casos pendentes de novo.");
         const next = executions.map((e) => (e.id === updated.id ? { ...e, ...updated } : e));
         setExecutions(next);
-        setComment("");
+        // O comentário foi junto com o resultado: limpa já (inclusive a ref), para o go() abaixo não gravá-lo de novo.
+        if (comment.trim()) {
+          draftsRef.current = { ...draftsRef.current, [updated.id]: "" };
+          setDrafts(draftsRef.current);
+        }
+        loadComments(updated.id).catch(() => {});
         // Passou: vai para o próximo pendente. Falhou/bloqueou: fica para abrir o bug.
         if (status.weight > 0) {
           const after = next.findIndex((e, i) => i > index && outcomeOf(e.status, statuses) === "pending");
@@ -132,7 +175,7 @@ export function ExecuteRunner(props: {
         setBusy(null);
       }
     },
-    [busy, comment, current, executions, go, index, statuses, timer],
+    [busy, comment, current, executions, go, index, loadComments, statuses, timer],
   );
 
   /** Vincula um bug que já existe (URL colada). */
@@ -244,16 +287,42 @@ export function ExecuteRunner(props: {
               {info?.text?.trim() ? <SimpleMarkdown text={info.text.trim()} /> : "Este caso não tem passos cadastrados."}
             </div>
 
-            <label className="mt-4 block text-xs font-medium text-fg-2" htmlFor="comment">
-              Comentário / evidência <kbd className="ml-1 rounded border border-border px-1 text-[10px] text-muted">C</kbd>
-            </label>
+            {(saved[current.id]?.length ?? 0) > 0 && (
+              <ul className="mt-4 space-y-2">
+                {saved[current.id].map((c) => (
+                  <li key={c.id} className="rounded-lg border border-border px-3 py-2 text-sm">
+                    <p className="flex items-center gap-1.5 text-xs text-muted">
+                      <MessageSquare className="size-3.5" /> {c.user__username ?? "—"} · {commentTime(c.submit_date)}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap">{c.comment}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-4 flex items-end justify-between gap-2">
+              <label className="block text-xs font-medium text-fg-2" htmlFor="comment">
+                Comentário / evidência <kbd className="ml-1 rounded border border-border px-1 text-[10px] text-muted">C</kbd>
+              </label>
+              {comment.trim() && (
+                <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => saveComment(current.id)} disabled={savingComment}>
+                  {savingComment ? <Loader2 className="size-3.5 animate-spin" /> : <MessageSquare className="size-3.5" />} Salvar comentário
+                </Button>
+              )}
+            </div>
             <textarea
               id="comment"
               ref={commentRef}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  saveComment(current.id);
+                }
+              }}
               rows={3}
-              placeholder="O que aconteceu? Cole links de prints ou vídeos."
+              placeholder="O que aconteceu? Cole links de prints ou vídeos. Ctrl+Enter salva; também é salvo ao registrar o resultado ou trocar de caso."
               className={cn(inputStyles, "mt-1 h-auto w-full py-2")}
             />
 
