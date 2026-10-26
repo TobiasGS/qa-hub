@@ -10,6 +10,8 @@ import type { TestExecution } from "@/lib/kiwi/types";
 import { outcomeOf, summarize, type Outcome } from "@/lib/metrics";
 import { caseOptions, planOptions } from "@/lib/options";
 import { parseRequirements, requirementTemplates } from "@/lib/requirements";
+import { PlanAzureTask } from "@/components/plan-azure-task";
+import { planCardId, planTask } from "@/lib/plan-task";
 import { requireKiwi } from "@/lib/session";
 import { canEditPlan, canSeePlan, visibleSet } from "@/lib/visibility";
 
@@ -23,6 +25,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
   const [pOptions, cOptions] = await Promise.all([planOptions(kiwi, visible), caseOptions(kiwi, plan.product)]);
   const executions = runs.length ? await kiwi.executions({ run__in: runs.map((r) => r.id) }) : [];
   const templates = requirementTemplates();
+  const [azureTask, cardId] = [await planTask(kiwi, plan.id), planCardId(plan)];
 
   // Último resultado executado de cada caso dentro deste plano.
   const last = new Map<number, TestExecution>();
@@ -60,6 +63,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
               ) : (
                 <RequirementChips value={plan.extra_link} templates={templates} />
               ))}
+            {cardId !== null && <PlanAzureTask planId={plan.id} task={azureTask} canCreate={editable} />}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -78,7 +82,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
 
       <div className="grid gap-3 lg:grid-cols-3">
         <Card className="pb-2 lg:col-span-2">
-          <CaseTable planId={plan.id} cases={sortedCases} lastOutcome={lastOutcome} options={cOptions} templates={templates} readOnly={!editable} />
+          <CaseTable planId={plan.id} cases={sortedCases} lastOutcome={lastOutcome} options={cOptions} templates={templates} readOnly={!editable} storyCard={cardId !== null ? `azure-${cardId}` : null} />
         </Card>
 
         <Card>

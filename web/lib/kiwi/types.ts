@@ -211,6 +211,12 @@ export interface KiwiApi {
   removeCaseFromPlan(planId: number, caseId: number): Promise<void>;
   createBuild(values: { name: string; version: number }): Promise<Build>;
   createRun(values: RunInput): Promise<TestRun>;
+  /** stop_date null reabre o run. Formato "AAAA-MM-DD HH:MM:SS" (UTC). */
+  updateRun(id: number, values: { stop_date: string | null }): Promise<TestRun>;
+  /** Tags do plano (o QA Hub guarda nelas o vínculo com a tarefa do Azure). */
+  planTags(planId: number): Promise<string[]>;
+  addPlanTag(planId: number, tag: string): Promise<void>;
+  removePlanTag(planId: number, tag: string): Promise<void>;
   /** Adiciona o caso ao run e devolve a execução criada. */
   addCaseToRun(runId: number, caseId: number): Promise<TestExecution>;
 

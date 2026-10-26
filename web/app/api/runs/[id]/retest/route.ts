@@ -1,4 +1,5 @@
 import { ApiError, apiRoute, currentUser, readJson, toId } from "@/lib/api";
+import { markRunStarted } from "@/lib/run-state";
 import { requireRunVisible } from "@/lib/visibility";
 import { outcomeOf } from "@/lib/metrics";
 
@@ -28,5 +29,6 @@ export const POST = apiRoute<{ id: string }>(async (ctx, req, { id }) => {
     const created = await kiwi.addCaseToRun(run.id, e.case);
     if (e.assignee && created.assignee !== e.assignee) await kiwi.updateExecution(created.id, { assignee: e.assignee });
   }
+  await markRunStarted(kiwi, source.plan); // tarefa do plano no Azure → "Em Teste"
   return { run, cases: failed.length };
 });

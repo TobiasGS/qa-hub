@@ -7,6 +7,7 @@ import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
 import { isEvidence } from "@/lib/evidence/shared";
 import { outcomeOf, summarize } from "@/lib/metrics";
 import { requireKiwi } from "@/lib/session";
+import { parseKiwiDate } from "@/lib/timer";
 import { canSeeRun, visibleSet } from "@/lib/visibility";
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +25,11 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
     <>
       <PageHeader
         title={run.summary}
-        description={`#${run.id} · ${run.plan__name} · build ${run.build__name}${run.stop_date ? " · concluído" : " · em andamento"}`}
+        description={`#${run.id} · ${run.plan__name} · build ${run.build__name} · ${
+          run.stop_date
+            ? `concluído em ${new Date(parseKiwiDate(run.stop_date)).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+            : "em andamento"
+        }`}
         action={
           <div className="flex flex-wrap gap-2">
             {failedCount > 0 && <RetestButton run={run} failedCount={failedCount} builds={builds} />}

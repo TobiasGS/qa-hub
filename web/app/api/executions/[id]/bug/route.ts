@@ -2,13 +2,14 @@ import { ApiError, apiRoute, readJson, toId, toText } from "@/lib/api";
 import { requireExecutionVisible } from "@/lib/visibility";
 import { AzureError, createBug, reproStepsHtml, SEVERITIES } from "@/lib/azure";
 import { AZURE_NOT_CONFIGURED, bugContext, reproData } from "@/lib/bug";
+import { hubOrigin } from "@/lib/origin";
 import { parseRequirements } from "@/lib/requirements";
 
 /**
  * Abre o bug de uma execução.
  *   { url }                        → só vincula um bug que já existe
  *   { title, severity, notes }     → cria no destino do card do plano:
- *       card AB#n → Bug no Azure DevOps, filho do card;  outros → Bug.report do Kiwi
+ *       card azure-N → Bug no Azure DevOps, filho do card;  outros → Bug.report do Kiwi
  */
 export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id }) => {
   const executionId = toId(id);
@@ -23,7 +24,7 @@ export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id 
   }
 
   const ctx = await bugContext(kiwi, executionId);
-  const origin = (process.env.QA_HUB_URL ?? new URL(req.url).origin).replace(/\/$/, "");
+  const origin = hubOrigin(req);
 
   if (ctx.destination === "azure") {
     const title = toText(raw.title, "título", { required: true });
@@ -46,7 +47,7 @@ export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id 
     } catch (e) {
       throw new ApiError(e instanceof AzureError ? e.message : `Falha ao criar o bug no Azure: ${(e as Error).message}`, 502);
     }
-    const link = await kiwi.addLink(executionId, { url: bug.url, name: `AB#${bug.id}`, is_defect: true });
+    const link = await kiwi.addLink(executionId, { url: bug.url, name: `azure-${bug.id}`, is_defect: true });
     return { link, parent: ctx.cardKey };
   }
 

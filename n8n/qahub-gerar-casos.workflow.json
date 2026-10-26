@@ -1,0 +1,130 @@
+{
+  "name": "QA Hub · Gerar casos da história",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "qahub-gerar-casos",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "2ef2db0c-bec5-49f7-a905-2af4af32fcf4",
+      "name": "Webhook (QA Hub)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "da491cf6-5df1-40a1-9ba1-c3162a97cca3",
+      "notes": "Crie uma credencial Header Auth com Name = X-QAHub-Secret e Value = o N8N_WEBHOOK_SECRET do QA Hub."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Você é um analista de QA sênior. Escreva casos de teste para a história abaixo.\n\nHistória {{ $json.body.story.key }}: {{ $json.body.story.title }}\n\nDescrição:\n{{ $json.body.story.description || '(sem descrição)' }}\n\nCritérios de aceite:\n{{ $json.body.story.acceptanceCriteria || '(sem critérios de aceite)' }}\n\nCasos que JÁ existem no plano (não repita): {{ JSON.stringify($json.body.existingCases || []) }}\n\nRegras:\n- Escreva em português do Brasil, no formato Gherkin (Cenário / Dado / Quando / Então / E).\n- Cubra cada critério de aceite e inclua casos negativos e de borda relevantes.\n- Gere entre 3 e 10 casos, sem duplicar os que já existem.\n- \"priority\" deve ser \"alta\", \"média\" ou \"baixa\"; \"kind\" deve ser \"positivo\", \"negativo\" ou \"borda\".\n- Responda APENAS com JSON válido, sem texto antes ou depois, neste formato:\n{\"cases\":[{\"title\":\"...\",\"priority\":\"alta\",\"kind\":\"positivo\",\"gherkin\":\"Cenário: ...\\n  Dado ...\\n  Quando ...\\n  Então ...\"}]}\n"
+      },
+      "id": "1df50e41-74db-4c99-ae6f-7e92ccd0fa32",
+      "name": "Gerar casos (IA)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": "deepseek/deepseek-r1:free",
+        "options": {}
+      },
+      "id": "85d12b99-1bbb-483b-9ea7-51f4ad966936",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        260,
+        220
+      ],
+      "notes": "Escolha a credencial OpenRouter. Pode trocar o modelo (ou o nó inteiro por Anthropic, OpenAI, Gemini…)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai o JSON dos casos da resposta da IA (modelos de raciocínio, como o DeepSeek R1,\n// escrevem um bloco <think> antes) e normaliza para o contrato do QA Hub.\nconst out = $input.first().json;\nlet text = String(out.text ?? out.output ?? out.response ?? '');\ntext = text.replace(/<think>[\\s\\S]*?<\\/think>/gi, '').replace(/```(?:json)?/gi, '').trim();\nconst start = text.indexOf('{');\nconst end = text.lastIndexOf('}');\nif (start < 0 || end <= start) throw new Error('A IA não devolveu JSON: ' + text.slice(0, 200));\n// Modelos às vezes quebram linha \"de verdade\" dentro das strings do JSON: escapa.\nlet json = '', inString = false, escaped = false;\nfor (const ch of text.slice(start, end + 1)) {\n  if (inString && !escaped && (ch === '\\n' || ch === '\\r' || ch === '\\t')) {\n    json += ch === '\\n' ? '\\\\n' : ch === '\\r' ? '' : '\\\\t';\n    continue;\n  }\n  if (ch === '\"' && !escaped) inString = !inString;\n  escaped = ch === '\\\\' && !escaped;\n  json += ch;\n}\nlet data;\ntry {\n  data = JSON.parse(json);\n} catch (e) {\n  throw new Error('JSON inválido na resposta da IA: ' + e.message);\n}\nconst list = Array.isArray(data) ? data : (data.cases || []);\nconst cases = list\n  .filter((c) => c && c.title && (c.gherkin || c.steps))\n  .map((c) => ({\n    title: String(c.title).trim(),\n    priority: String(c.priority || 'média').toLowerCase(),\n    kind: String(c.kind || 'positivo').toLowerCase(),\n    gherkin: String(c.gherkin || c.steps).trim(),\n  }));\nif (!cases.length) throw new Error('Nenhum caso válido na resposta da IA');\nreturn [{ json: { cases } }];\n"
+      },
+      "id": "b023a68f-135e-497e-b65e-d1850e176d3b",
+      "name": "Extrair JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "ad69ef90-dbe4-44b8-8b11-c77639ffb7d7",
+      "name": "Responder ao QA Hub",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        800,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (QA Hub)": {
+      "main": [
+        [
+          {
+            "node": "Gerar casos (IA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Gerar casos (IA)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar casos (IA)": {
+      "main": [
+        [
+          {
+            "node": "Extrair JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair JSON": {
+      "main": [
+        [
+          {
+            "node": "Responder ao QA Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

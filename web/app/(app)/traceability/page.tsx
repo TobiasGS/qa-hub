@@ -107,7 +107,7 @@ export default async function TraceabilityPage({ searchParams }: { searchParams:
         )}
       </Card>
       <p className="mt-3 text-xs text-muted">
-        O requisito vem do campo <b>Requirement</b> do caso no Kiwi (ex.: SHOP-101 ou AB#456). &quot;Último resultado&quot; considera a execução mais recente já executada do caso.
+        O requisito vem do campo <b>Requirement</b> do caso no Kiwi (ex.: azure-86 ou jira-101). &quot;Último resultado&quot; considera a execução mais recente já executada do caso.
       </p>
     </>
   );

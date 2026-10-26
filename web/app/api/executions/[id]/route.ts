@@ -1,5 +1,6 @@
 import { ApiError, apiRoute, readJson, toId } from "@/lib/api";
 import { requireExecutionVisible } from "@/lib/visibility";
+import { syncRunState } from "@/lib/run-state";
 import { kiwiDate, timerComment } from "@/lib/timer";
 
 /**
@@ -21,5 +22,7 @@ export const PATCH = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id
   const execution = await kiwi.updateExecution(executionId, { status, ...timing });
   if (comment) await kiwi.addComment(executionId, comment);
   if (elapsed !== null) await kiwi.addComment(executionId, timerComment("finish", elapsed, execution.status__name));
-  return { execution };
+  // Último caso executado → run concluído (e tarefa do plano no Azure: Testado / Teste Recusado).
+  const run = await syncRunState(kiwi, execution.run);
+  return { execution, run };
 });

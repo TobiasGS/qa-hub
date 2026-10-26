@@ -1,4 +1,5 @@
 import { ApiError, apiRoute, currentUser, readJson, toId, toText } from "@/lib/api";
+import { markRunStarted } from "@/lib/run-state";
 import { requirePlanEditable } from "@/lib/visibility";
 
 /**
@@ -27,5 +28,6 @@ export const POST = apiRoute(async (ctx, req) => {
     const assignee = c.assignee ?? defaultTester;
     if (assignee && execution.assignee !== assignee) await kiwi.updateExecution(execution.id, { assignee });
   }
+  await markRunStarted(kiwi, planId); // tarefa do plano no Azure → "Em Teste"
   return { run };
 });

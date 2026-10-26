@@ -207,7 +207,7 @@ export async function traceabilityData(kiwi: KiwiApi, visible: Visible | null) {
   }
   const caseOfExecution = new Map(executions.map((e) => [e.id, e.case]));
 
-  // Um caso com várias chaves ("SHOP-1, AB#2") aparece em cada requisito.
+  // Um caso com várias chaves ("azure-86, jira-1") aparece em cada requisito; AB#86 e azure-86 são o mesmo.
   // Casos desativados saem da matriz.
   const groups = new Map<string, TraceCase[]>();
   for (const c of cases) {

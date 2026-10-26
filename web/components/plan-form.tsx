@@ -24,8 +24,8 @@ export function PlanForm({ plan, options, templates, onDone }: { plan?: TestPlan
   const [newProject, setNewProject] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
   const [kind, setKind] = useState<Kind>(plan?.type__name === "Automatizado" ? "automated" : "manual");
-  // O Kiwi guarda a URL do card; no formulário mostramos a chave (AB#86), mais fácil de ler.
-  const [link, setLink] = useState(plan?.extra_link ? (parseRequirements(plan.extra_link).keys[0] ?? plan.extra_link) : "");
+  // O Kiwi guarda a URL do card; no formulário mostramos a chave (azure-86), mais fácil de ler.
+  const [link, setLink] = useState(plan?.extra_link ? (parseRequirements(plan.extra_link, templates.jiraProject).keys[0] ?? plan.extra_link) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,9 +137,9 @@ export function PlanForm({ plan, options, templates, onDone }: { plan?: TestPlan
       <Field
         label="Card do épico/feature"
         className="sm:col-span-2"
-        hint={parseRequirements(link).keys.length ? <RequirementChips value={link} templates={templates} /> : "Os bugs abertos neste plano ficam ligados a este card."}
+        hint={parseRequirements(link, templates.jiraProject).keys.length ? <RequirementChips value={link} templates={templates} /> : "Os bugs abertos neste plano ficam ligados a este card."}
       >
-        <TextInput name="extra_link" value={link} onChange={(e) => setLink(e.target.value)} placeholder="AB#86, SHOP-100 ou link do card" />
+        <TextInput name="extra_link" value={link} onChange={(e) => setLink(e.target.value)} placeholder="azure-86, jira-100 ou link do card" />
       </Field>
       <Field label="Descrição" className="sm:col-span-2" hint="Escopo, ambiente, critérios de aceite. Aceita Markdown.">
         <TextArea name="text" defaultValue={plan?.text} rows={4} />

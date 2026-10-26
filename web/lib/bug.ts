@@ -3,15 +3,15 @@ import { ApiError } from "./api";
 import { azureConfig } from "./azure";
 import { isEvidence } from "./evidence/shared";
 import type { KiwiApi } from "./kiwi/types";
-import { parseRequirements, trackerOf } from "./requirements";
+import { azureIdOf, parseRequirements, trackerOf } from "./requirements";
 
 export const AZURE_NOT_CONFIGURED =
   "O Azure DevOps ainda não está configurado: coloque o seu PAT em AZURE_DEVOPS_PAT no web/.env.local (escopo Work Items: Read & Write) e reinicie o QA Hub.";
 
 /**
  * Para onde vai o bug de uma execução: o card do plano define o destino.
- *   AB#n  → Azure DevOps (filho do card)
- *   SHOP-n ou nenhum card → bug tracker configurado no Kiwi (Bug.report)
+ *   azure-N → Azure DevOps (filho do card)
+ *   jira-N ou nenhum card → bug tracker configurado no Kiwi (Bug.report)
  */
 export async function bugContext(kiwi: KiwiApi, executionId: number) {
   const [execution] = await kiwi.executions({ id: executionId });
@@ -27,7 +27,7 @@ export async function bugContext(kiwi: KiwiApi, executionId: number) {
     plan,
     cardKey,
     destination: tracker === "azure" ? ("azure" as const) : ("kiwi" as const),
-    azureParentId: tracker === "azure" ? Number(cardKey!.slice(3)) : null,
+    azureParentId: tracker === "azure" ? azureIdOf(cardKey) : null,
     azureConfigured: azureConfig() !== null,
   };
 }

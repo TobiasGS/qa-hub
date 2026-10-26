@@ -15,6 +15,7 @@
     "KIWI_URL": "https://kiwi.seu-dominio.com",
     "KIWI_BUG_TRACKER_ID": "1",
     "REQUIREMENT_URL_JIRA": "https://sua-empresa.atlassian.net/browse/{key}",
+    "JIRA_PROJECT_KEY": "SHOP",
     // Azure DevOps Server (on-premises): troque <servidor>, <coleção> e <projeto> pelos seus.
     "REQUIREMENT_URL_AZURE": "https://<servidor>/tfs/<coleção>/<projeto>/_workitems/edit/{key}",
     // O PAT vai como secret:  npx wrangler secret put AZURE_DEVOPS_PAT

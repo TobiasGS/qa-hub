@@ -13,12 +13,13 @@ navegador ──► QA Hub (Next.js, qa.seu-dominio.com)
 
 **O que tem:**
 - **Dashboard:** filtro por projeto, taxa de sucesso (por build ou por semana), tempo médio por caso, tabela "Por projeto", progresso dos runs, casos que mais falham e bugs recentes.
-- **Planos:** organizados em seções por **projeto** (com filtro); criar com Projeto (ou "+ Projeto"), Tipo Manual/Automatizado e card do épico/feature; editar, arquivar e restaurar.
-- **Casos:** criar, editar, desativar e remover do plano, cada um ligado a um ou mais cards do Jira/Azure (`SHOP-101, AB#55`).
+- **Planos:** organizados em seções por **projeto** (com filtro); criar com Projeto (ou "+ Projeto"), Tipo Manual/Automatizado e card do épico/feature; editar, arquivar e restaurar. Com card do Azure, o plano ganha uma **tarefa "Plano de Teste"** no card, com o estado acompanhando os runs.
+- **Casos:** criar, editar, desativar e remover do plano, cada um ligado a um ou mais cards do Jira/Azure (`jira-101, azure-55`); **Gerar casos da história** propõe os casos (Dado/Quando/Então) a partir do card do Azure, via n8n.
 - **Runs:**
   - criar a partir do plano, escolhendo build (ou criando uma nova), casos e quem testa cada um;
   - **Re-testar falhas**, que cria um run só com o que falhou ou ficou bloqueado;
-  - filtros por plano, build e situação.
+  - filtros por plano, build e situação;
+  - o run é **concluído sozinho** quando não sobra caso pendente, e reabre se algum voltar a pendente.
 - **Meus testes:** o que está pendente para quem está logado, com aviso no dashboard.
 - **Execução manual:**
   - atalhos de teclado (`P` passou, `F` falhou, `B` bloqueado, `C` comentário, `J`/`K` navegar, `Espaço` pausar/retomar);
@@ -149,10 +150,10 @@ Cada pessoa entra com o **próprio usuário do Kiwi**, então cada execução fi
 
 No formulário do caso, o campo **Cards do Jira/Azure** aceita uma ou mais chaves separadas por vírgula. Elas ficam gravadas no campo `requirement` do caso no Kiwi.
 
-- **Jira:** `SHOP-123` vira link pelo `REQUIREMENT_URL_JIRA`.
-- **Azure Boards:** `AB#456` vira link pelo `REQUIREMENT_URL_AZURE` (o `{key}` recebe só o número).
+- **Azure Boards:** `azure-86` vira link pelo `REQUIREMENT_URL_AZURE` (o `{key}` recebe só o número).
+- **Jira:** `jira-86` vira link pelo `REQUIREMENT_URL_JIRA`, com o projeto padrão de `JIRA_PROJECT_KEY` (ex.: `SHOP` → `…/browse/SHOP-86`). Card de outro projeto fica `jira-OUTRO-86`.
 
-Também dá para **colar o link do card**: ao sair do campo, ele vira a chave. Por exemplo, o link do quadro da sprint `…/_sprints/taskboard/…?workitem=86` (ou `…/_workitems/edit/86`) vira `AB#86`, e `…/browse/SHOP-1` vira `SHOP-1`.
+Também dá para **colar o link do card**: ao sair do campo, ele vira a chave. Por exemplo, o link do quadro da sprint `…/_sprints/taskboard/…?workitem=86` (ou `…/_workitems/edit/86`) vira `azure-86`, e `…/browse/SHOP-1` vira `jira-1`. As chaves antigas (`AB#86`, `SHOP-86`) continuam aceitas e aparecem no formato novo; a rastreabilidade junta as duas formas no mesmo requisito.
 
 **Azure DevOps Server (on-premises):** o modelo de link é `https://<servidor>/tfs/<coleção>/<projeto>/_workitems/edit/{key}`. Neste projeto ele já está configurado para `https://<servidor>/tfs/<coleção>/<projeto>/_workitems/edit/{key}`.
 
@@ -166,12 +167,12 @@ O **Tipo** tem duas opções: **Manual** ou **Automatizado**. Elas viram os Plan
 
 ### Bugs no Azure DevOps (filho do card)
 
-Quando o **card do plano** é do Azure (`AB#86`), o "Abrir bug" da execução cria o Bug direto no Azure DevOps:
+Quando o **card do plano** é do Azure (`azure-86`), o "Abrir bug" da execução cria o Bug direto no Azure DevOps:
 - como **filho** do card (aparece embaixo da história no taskboard), na mesma **área e sprint**;
 - com título, severidade e observações escolhidos no diálogo;
 - com os **Repro Steps** montados sozinhos: passos do caso, comentários da execução, links das evidências, run, build, testador e um link de volta para a execução no QA Hub.
 
-O link `AB#<novo>` fica gravado como defeito na execução do Kiwi, e por isso aparece no dashboard e na rastreabilidade. Plano com card do Jira, ou sem card, continua abrindo o bug pelo bug tracker do Kiwi.
+O link `azure-<novo>` fica gravado como defeito na execução do Kiwi, e por isso aparece no dashboard e na rastreabilidade. Plano com card do Jira, ou sem card, continua abrindo o bug pelo bug tracker do Kiwi.
 
 **Para ligar:**
 1. No Azure DevOps, clique no seu avatar → **Personal access tokens** → **New Token**, com o escopo **Work Items: Read & Write**.
@@ -181,6 +182,34 @@ O link `AB#<novo>` fica gravado como defeito na execução do Kiwi, e por isso a
 **Rede:** quem chama o Azure é o servidor do QA Hub. Rodando no seu PC, dentro da rede da empresa, funciona. No Cloudflare Workers, só funciona se `<servidor-do-azure-devops>` for acessível pela internet. Se não for, rode o QA Hub dentro da rede (por exemplo, na mesma máquina do Kiwi, publicado pelo Tunnel).
 
 Sem PAT, o diálogo explica o que falta e o botão fica desabilitado. O QA Hub nunca inventa um número de bug, porque ele viraria um link quebrado no Azure. Se o card do plano não puder ser lido (por rede, PAT ou permissão), o diálogo mostra o erro do Azure e também não deixa criar o bug.
+
+### Tarefa "Plano de Teste" no card do Azure
+
+Ao criar um plano com card do Azure (ou trocar o card), o QA Hub cria um work item do tipo **Tarefa** (`AZURE_TASK_TYPE`) como **filho do card**, com o título "Plano de Teste: <nome do plano>" e um link de volta para o plano. Planos antigos ganham o botão **Criar tarefa no Azure** na página do plano. A ligação fica numa tag do plano no Kiwi (`qahub-azure-task:<tarefa>@<card>`).
+
+O estado da tarefa acompanha o **run mais recente** do plano:
+
+| Evento | Estado |
+| --- | --- |
+| run criado (ou re-teste, ou run reaberto) | **Em Teste** |
+| run concluído com tudo passou | **Testado** |
+| run concluído com alguma falha ou bloqueio | **Teste Recusado** |
+
+Os nomes vêm do processo do Azure e podem ser trocados com `AZURE_STATE_TESTING`, `AZURE_STATE_PASSED` e `AZURE_STATE_FAILED`. Uma falha no Azure nunca impede criar o plano ou registrar um resultado: vira um aviso na tela (criação) ou uma linha no log (estado). Renomear o plano renomeia a tarefa; arquivar o plano não mexe nela.
+
+**Run concluído:** quando o último caso pendente recebe resultado, o run ganha data de conclusão (`stop_date`) e sai de "Em andamento". Se um caso voltar a pendente, o run reabre sozinho.
+
+### Gerar casos da história (n8n + IA)
+
+Na página de um plano com card do Azure, o botão **Gerar casos da história** lê o card (título, descrição e critérios de aceite) e manda para um workflow do **n8n**, que usa a IA configurada nele. Os casos voltam no formato **Dado/Quando/Então**, aparecem num diálogo para revisar (desmarcar, editar título, prioridade e passos) e só então são criados no plano, já ligados ao `azure-N`. Casos que o plano já tem são enviados para a IA não repetir.
+
+**Para ligar (uma vez):**
+1. Abra o n8n (`http://localhost:5678`) → **Import from File** → `n8n/qahub-gerar-casos.workflow.json`.
+2. No nó **Webhook (QA Hub)**, crie uma credencial **Header Auth** com Name `X-QAHub-Secret` e Value igual ao `N8N_WEBHOOK_SECRET` do `web/.env.production.local` (e do `.env.local`, em dev).
+3. No nó **OpenRouter Chat Model**, escolha a sua credencial. O modelo padrão é `deepseek/deepseek-r1:free`; dá para trocar o modelo ou o nó inteiro por outro provedor de IA.
+4. **Ative** o workflow (chave *Active*). Sem isso, o webhook responde 404 e o QA Hub avisa.
+
+`N8N_WEBHOOK_URL` aponta para `http://localhost:5678/webhook/qahub-gerar-casos` em dev e para `http://host.docker.internal:5678/webhook/qahub-gerar-casos` no container (o compose já mapeia `host.docker.internal`). O iniciador sobe o n8n junto. Se `n8n.seu-dominio.com` também estiver publicado no Tunnel, proteja-o com o Cloudflare Access: o QA Hub não precisa dele, porque chama o n8n por dentro do PC.
 
 ### Cronômetro e histórico
 
@@ -238,11 +267,12 @@ Tudo roda no Docker deste PC (`db`, `web` = Kiwi, `qa-hub`), com `restart: unles
 2. Na pasta do projeto, dê **dois cliques em `Iniciar QA Hub.cmd`**.
 3. Espere a janela mostrar **"Tudo no ar!"** (leva de 40 segundos a 2 minutos). O navegador abre sozinho no endereço público.
 
-O iniciador (`scripts\iniciar.ps1`) faz e confere quatro coisas:
+O iniciador (`scripts\iniciar.ps1`) faz e confere cinco coisas:
 1. **Docker:** abre o Docker Desktop se ele estiver fechado.
 2. **Containers:** sobe o banco, o Kiwi e o QA Hub e espera os três ficarem saudáveis.
 3. **Tunnel:** confere o serviço `cloudflared` do Windows (ele já inicia sozinho com o PC).
-4. **Acesso:** testa o QA Hub no próprio PC e o endereço público. O endereço é lido de `QA_HUB_URL` no `web/.env.production.local`.
+4. **n8n:** se a porta 5678 não responde, inicia o `n8n` instalado pelo npm, em segundo plano (log em `~/.n8n/qahub-iniciar.log`), e espera ele ficar pronto. Só o "Gerar casos da história" depende dele.
+5. **Acesso:** testa o QA Hub no próprio PC e o endereço público. O endereço é lido de `QA_HUB_URL` no `web/.env.production.local`.
 
 Se algo der errado, a janela mostra `[!!]` com o que fazer. Com o PC desligado ou o Docker fechado, o site fica fora do ar.
 

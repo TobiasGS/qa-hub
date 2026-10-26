@@ -7,7 +7,7 @@ import { formatRequirements, parseRequirements, requirementTemplates, requiremen
 const has = (raw: Record<string, unknown>, key: string) => key in raw;
 
 /**
- * Card do plano: o Kiwi só aceita URL em TestPlan.extra_link. Uma chave (AB#86 / SHOP-100)
+ * Card do plano: o Kiwi só aceita URL em TestPlan.extra_link. Uma chave (azure-86 / jira-100)
  * vira a URL do card pelo modelo do Azure/Jira; o QA Hub lê a chave de volta da URL.
  */
 function planLink(value: unknown): string | null {
@@ -15,15 +15,15 @@ function planLink(value: unknown): string | null {
   if (!s) return null;
   if (/^https?:\/\//i.test(s)) return s;
   const { keys, invalid } = parseRequirements(s);
-  if (invalid.length || keys.length !== 1) throw new ApiError("Card do plano: use uma chave como AB#86 ou SHOP-100, ou cole o link do card");
+  if (invalid.length || keys.length !== 1) throw new ApiError("Card do plano: use uma chave como azure-86 ou jira-100, ou cole o link do card");
   const url = requirementUrl(keys[0], requirementTemplates());
-  if (!url) throw new ApiError(`Sem modelo de link para ${keys[0]}: configure REQUIREMENT_URL_AZURE / REQUIREMENT_URL_JIRA ou cole o link do card`);
+  if (!url) throw new ApiError(`Sem modelo de link para ${keys[0]}: configure REQUIREMENT_URL_AZURE, REQUIREMENT_URL_JIRA e JIRA_PROJECT_KEY, ou cole o link do card`);
   return url;
 }
 
 function requirement(value: unknown): string | null {
   const { keys, invalid } = parseRequirements(typeof value === "string" ? value : "");
-  if (invalid.length) throw new ApiError(`Chave(s) inválida(s): ${invalid.join(", ")}. Use o formato SHOP-123 (Jira) ou AB#456 (Azure).`);
+  if (invalid.length) throw new ApiError(`Chave(s) inválida(s): ${invalid.join(", ")}. Use azure-86 (Azure), jira-123 (Jira) ou cole o link do card.`);
   return formatRequirements(keys);
 }
 

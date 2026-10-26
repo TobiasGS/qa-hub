@@ -6,6 +6,7 @@ import "server-only";
 //   AZURE_DEVOPS_PAT   Personal Access Token com Work Items (Read & Write) — secret, nunca vai ao navegador
 //   AZURE_API_VERSION  padrão 6.0 (Azure DevOps Server 2020+)
 //   AZURE_BUG_TYPE     padrão "Bug" (no processo Basic é "Issue")
+//   AZURE_TASK_TYPE    padrão "Tarefa": tipo da tarefa "Plano de Teste" criada no card do plano
 
 export class AzureError extends Error {}
 
@@ -21,7 +22,9 @@ export interface WorkItem {
 export function azureConfig() {
   const base = process.env.AZURE_DEVOPS_URL?.replace(/\/$/, "");
   const pat = process.env.AZURE_DEVOPS_PAT;
-  return base && pat ? { base, pat, apiVersion: process.env.AZURE_API_VERSION ?? "6.0", bugType: process.env.AZURE_BUG_TYPE ?? "Bug" } : null;
+  return base && pat
+    ? { base, pat, apiVersion: process.env.AZURE_API_VERSION ?? "6.0", bugType: process.env.AZURE_BUG_TYPE ?? "Bug", taskType: process.env.AZURE_TASK_TYPE ?? "Tarefa" }
+    : null;
 }
 
 export const workItemHtmlUrl = (base: string, id: number) => `${base}/_workitems/edit/${id}`;
@@ -78,6 +81,75 @@ export async function getWorkItem(id: number): Promise<WorkItem> {
   };
 }
 
+/** HTML do Azure (descrição, critérios de aceite) → texto simples, preservando quebras de linha e listas. */
+export function htmlToText(html: string | undefined): string {
+  if (!html) return "";
+  return html
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\s*li[^>]*>/gi, "\n- ")
+    .replace(/<\/\s*(p|div|li|h\d|tr)\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** História do card para gerar casos: título, descrição e critérios de aceite (em texto). */
+export async function getStory(id: number): Promise<{ id: number; type: string; title: string; description: string; acceptanceCriteria: string }> {
+  const w = await call<RawWorkItem>(`wit/workitems/${id}?fields=System.Title,System.WorkItemType,System.Description,Microsoft.VSTS.Common.AcceptanceCriteria`);
+  return {
+    id: w.id,
+    type: w.fields["System.WorkItemType"] ?? "",
+    title: w.fields["System.Title"] ?? "",
+    description: htmlToText(w.fields["System.Description"]),
+    acceptanceCriteria: htmlToText(w.fields["Microsoft.VSTS.Common.AcceptanceCriteria"]),
+  };
+}
+
+const add = (path: string, value: unknown) => ({ op: "add", path, value });
+
+/**
+ * Cria um work item filho do card (mesma área e sprint do pai), com um Hyperlink
+ * de volta para o QA Hub. Base do Bug e da tarefa "Plano de Teste".
+ */
+export async function createChildWorkItem(item: {
+  parentId: number;
+  type: string;
+  title: string;
+  fields?: Record<string, string>;
+  hyperlink: string;
+  relationComment: string;
+  hyperlinkComment: string;
+}): Promise<{ id: number; url: string }> {
+  const cfg = azureConfig()!;
+  const parent = await getWorkItem(item.parentId);
+  const ops = [
+    add("/fields/System.Title", item.title),
+    ...Object.entries(item.fields ?? {}).map(([field, value]) => add(`/fields/${field}`, value)),
+    ...(parent.areaPath ? [add("/fields/System.AreaPath", parent.areaPath)] : []),
+    ...(parent.iterationPath ? [add("/fields/System.IterationPath", parent.iterationPath)] : []),
+    add("/relations/-", { rel: "System.LinkTypes.Hierarchy-Reverse", url: parent.url, attributes: { comment: item.relationComment } }),
+    add("/relations/-", { rel: "Hyperlink", url: item.hyperlink, attributes: { comment: item.hyperlinkComment } }),
+  ];
+  const created = await call<RawWorkItem>(`wit/workitems/$${encodeURIComponent(item.type)}`, { method: "POST", body: ops, contentType: "application/json-patch+json" });
+  return { id: created.id, url: workItemHtmlUrl(cfg.base, created.id) };
+}
+
+/** Atualiza título e/ou estado de um work item. */
+export async function updateWorkItem(id: number, values: { title?: string; state?: string }): Promise<void> {
+  const ops = [
+    ...(values.title !== undefined ? [add("/fields/System.Title", values.title)] : []),
+    ...(values.state !== undefined ? [add("/fields/System.State", values.state)] : []),
+  ];
+  if (ops.length) await call(`wit/workitems/${id}`, { method: "PATCH", body: ops, contentType: "application/json-patch+json" });
+}
+
 export interface NewBug {
   parentId: number;
   title: string;
@@ -88,27 +160,22 @@ export interface NewBug {
 }
 
 /** Cria o Bug como filho do card (mesma área e sprint) e devolve id e link. */
-export async function createBug(bug: NewBug): Promise<{ id: number; url: string }> {
-  const cfg = azureConfig()!;
-  const parent = await getWorkItem(bug.parentId);
-  const add = (path: string, value: unknown) => ({ op: "add", path, value });
-  const ops = [
-    add("/fields/System.Title", bug.title),
-    add("/fields/Microsoft.VSTS.TCM.ReproSteps", bug.reproHtml),
-    add("/fields/Microsoft.VSTS.Common.Severity", bug.severity),
-    add("/fields/Microsoft.VSTS.Build.FoundIn", bug.foundIn),
-    ...(parent.areaPath ? [add("/fields/System.AreaPath", parent.areaPath)] : []),
-    ...(parent.iterationPath ? [add("/fields/System.IterationPath", parent.iterationPath)] : []),
-    add("/relations/-", { rel: "System.LinkTypes.Hierarchy-Reverse", url: parent.url, attributes: { comment: "Bug encontrado no QA Hub" } }),
-    add("/relations/-", { rel: "Hyperlink", url: bug.hyperlink, attributes: { comment: "Execução no QA Hub" } }),
-  ];
-  const created = await call<RawWorkItem>(`wit/workitems/$${encodeURIComponent(cfg.bugType)}`, { method: "POST", body: ops, contentType: "application/json-patch+json" });
-  return { id: created.id, url: workItemHtmlUrl(cfg.base, created.id) };
+export function createBug(bug: NewBug): Promise<{ id: number; url: string }> {
+  return createChildWorkItem({
+    parentId: bug.parentId,
+    type: azureConfig()!.bugType,
+    title: bug.title,
+    fields: { "Microsoft.VSTS.TCM.ReproSteps": bug.reproHtml, "Microsoft.VSTS.Common.Severity": bug.severity, "Microsoft.VSTS.Build.FoundIn": bug.foundIn },
+    hyperlink: bug.hyperlink,
+    relationComment: "Bug encontrado no QA Hub",
+    hyperlinkComment: "Execução no QA Hub",
+  });
 }
 
 export const SEVERITIES = ["1 - Critical", "2 - High", "3 - Medium", "4 - Low"] as const;
 
-const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const escape = escapeHtml;
 
 /** Monta o Repro Steps (HTML) a partir do caso e da execução. Todo texto é escapado. */
 export function reproStepsHtml(p: {

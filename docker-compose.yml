@@ -57,6 +57,9 @@ services:
       - "3000:3000"
     env_file:
       - ./web/.env.production.local
+    # O n8n roda direto no Windows (porta 5678): o container o alcança por host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - evidence:/app/.evidence
     healthcheck:

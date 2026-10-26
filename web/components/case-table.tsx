@@ -9,6 +9,7 @@ import type { Outcome } from "@/lib/metrics";
 import type { RequirementTemplates } from "@/lib/requirements";
 import { CaseForm, caseStatusLabel, type CaseOptions } from "./case-form";
 import { ConfirmDialog, Dialog } from "./dialog";
+import { GenerateCasesButton } from "./generate-cases-dialog";
 import { RequirementChips } from "./requirement-chips";
 import { StatusBadge } from "./status";
 import { Badge, Button, cn, EmptyState } from "./ui";
@@ -28,6 +29,7 @@ export function CaseTable({
   options,
   templates,
   readOnly = false,
+  storyCard = null,
 }: {
   planId: number;
   cases: TestCase[];
@@ -37,6 +39,8 @@ export function CaseTable({
   templates: RequirementTemplates;
   /** Plano de outra pessoa (visível por atribuição): só leitura, sem criar/editar/clonar/remover. */
   readOnly?: boolean;
+  /** Card do Azure do plano (azure-N): mostra "Gerar casos da história". */
+  storyCard?: string | null;
 }) {
   const router = useRouter();
   const [action, setAction] = useState<Action>(null);
@@ -78,9 +82,12 @@ export function CaseTable({
           <p className="mt-0.5 text-xs text-muted">{cases.length} neste plano</p>
         </div>
         {!readOnly && (
-          <Button variant="primary" onClick={() => setAction({ kind: "new" })}>
-            <Plus className="size-4" /> Novo caso
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {storyCard && <GenerateCasesButton planId={planId} cardKey={storyCard} options={options} />}
+            <Button variant="primary" onClick={() => setAction({ kind: "new" })}>
+              <Plus className="size-4" /> Novo caso
+            </Button>
+          </div>
         )}
       </div>
 

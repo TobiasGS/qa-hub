@@ -141,6 +141,17 @@ export function realKiwi(sessionId: string): KiwiApi {
       const r = await call<{ id: number }>("TestRun.create", values);
       return one("TestRun.filter", r.id);
     },
+    updateRun: async (id, values) => {
+      await call("TestRun.update", id, values);
+      return one("TestRun.filter", id);
+    },
+    planTags: async (planId) => (await filter<{ name: string }>("Tag.filter", { plan: planId })).map((t) => t.name),
+    addPlanTag: async (planId, tag) => {
+      await call("TestPlan.add_tag", planId, tag);
+    },
+    removePlanTag: async (planId, tag) => {
+      await call("TestPlan.remove_tag", planId, tag);
+    },
     addCaseToRun: async (runId, caseId) => {
       await call("TestRun.add_case", runId, caseId);
       const [e] = await filter<TestExecution>("TestExecution.filter", { run: runId, case: caseId });

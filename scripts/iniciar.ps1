@@ -15,7 +15,7 @@ function Falha($texto) { Write-Host "   [!!] $texto" -ForegroundColor Yellow; $s
 function DockerPronto { docker version --format "{{.Server.Version}}" 2>$null | Out-Null; return $LASTEXITCODE -eq 0 }
 
 # 1. Docker
-Passo "1/4 Docker"
+Passo "1/5 Docker"
 if (DockerPronto) {
     Ok "Docker já está rodando"
 } else {
@@ -30,7 +30,7 @@ if (DockerPronto) {
 }
 
 # 2. Containers (banco, Kiwi e QA Hub)
-Passo "2/4 Containers"
+Passo "2/5 Containers"
 docker compose up -d 2>&1 | Out-Null
 $limite = (Get-Date).AddMinutes(3)
 do {
@@ -45,7 +45,7 @@ foreach ($linha in $status) {
 }
 
 # 3. Tunnel do Cloudflare (serviço do Windows)
-Passo "3/4 Tunnel do Cloudflare"
+Passo "3/5 Tunnel do Cloudflare"
 $svc = Get-Service cloudflared -ErrorAction SilentlyContinue
 if (-not $svc) { Falha "Serviço cloudflared não encontrado" }
 elseif ($svc.Status -eq "Running") { Ok "serviço cloudflared rodando" }
@@ -54,8 +54,27 @@ else {
     catch { Falha "O serviço cloudflared está parado e não iniciou (pode exigir administrador): services.msc > cloudflared > Iniciar" }
 }
 
-# 4. Testes de acesso
-Passo "4/4 Testando o acesso"
+# 4. n8n (gera os casos pela história; roda direto no Windows, dados em ~/.n8n)
+Passo "4/5 n8n"
+function N8nPronto { try { (Invoke-WebRequest -UseBasicParsing http://localhost:5678/healthz -TimeoutSec 3).StatusCode -eq 200 } catch { $false } }
+if (N8nPronto) {
+    Ok "n8n já está rodando (http://localhost:5678)"
+} else {
+    $n8n = Get-Command n8n.cmd -ErrorAction SilentlyContinue
+    if (-not $n8n) { Falha "n8n não encontrado (instale com: npm install -g n8n). Só o botão 'Gerar casos da história' depende dele." }
+    else {
+        $log = Join-Path $env:USERPROFILE ".n8n\qahub-iniciar.log"
+        Write-Host "   iniciando o n8n em segundo plano (log: $log)..."
+        Start-Process cmd.exe -ArgumentList "/c `"`"$($n8n.Source)`" start > `"$log`" 2>&1`"" -WindowStyle Hidden
+        $limite = (Get-Date).AddMinutes(2)
+        while (-not (N8nPronto) -and (Get-Date) -lt $limite) { Start-Sleep -Seconds 3; Write-Host "   ." -NoNewline }
+        Write-Host ""
+        if (N8nPronto) { Ok "n8n pronto (http://localhost:5678)" } else { Falha "O n8n não respondeu em 2 minutos. Veja o log: $log" }
+    }
+}
+
+# 5. Testes de acesso
+Passo "5/5 Testando o acesso"
 try { $r = Invoke-WebRequest -UseBasicParsing http://localhost:3000/login -TimeoutSec 20; if ($r.StatusCode -eq 200) { Ok "QA Hub responde neste PC (http://localhost:3000)" } }
 catch { Falha "QA Hub não respondeu em http://localhost:3000" }
 

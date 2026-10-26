@@ -1,10 +1,10 @@
 import { ExternalLink } from "lucide-react";
-import { parseRequirements, requirementUrl, trackerOf, type RequirementTemplates } from "@/lib/requirements";
+import { parseRequirements, requirementUrl, type RequirementTemplates } from "@/lib/requirements";
 import { cn } from "./ui";
 
 /** Chaves do Jira/Azure como chips; com modelo de URL configurado, viram links para o card. */
 export function RequirementChips({ value, templates, className }: { value: string | null | undefined; templates: RequirementTemplates; className?: string }) {
-  const { keys, invalid } = parseRequirements(value);
+  const { keys, invalid } = parseRequirements(value, templates.jiraProject);
   if (!keys.length && !invalid.length) return null;
   return (
     <span className={cn("inline-flex flex-wrap gap-1", className)}>
@@ -12,7 +12,6 @@ export function RequirementChips({ value, templates, className }: { value: strin
         const url = requirementUrl(key, templates);
         const label = (
           <>
-            <span className="text-[10px] font-semibold uppercase text-muted">{trackerOf(key) === "azure" ? "Azure" : "Jira"}</span>
             {key}
             {url && <ExternalLink className="size-3 text-muted" aria-hidden />}
           </>

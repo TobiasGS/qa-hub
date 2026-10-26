@@ -84,6 +84,7 @@ export function ExecuteRunner(props: {
   const replaceExecution = useCallback((updated: TestExecution) => setExecutions((list) => list.map((e) => (e.id === updated.id ? { ...e, ...updated } : e))), []);
   const timer = useExecutionTimer(current, statuses, replaceExecution);
   const [bugOpen, setBugOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const go = useCallback(
     (i: number) => {
@@ -115,6 +116,8 @@ export function ExecuteRunner(props: {
         if (!res.ok) throw new Error(body.error ?? "Falha ao salvar");
         const updated: TestExecution = body.execution;
         timer.finish();
+        if (body.run === "closed") setNotice("Todos os casos executados: run concluído.");
+        else if (body.run === "reopened") setNotice("Run reaberto: há casos pendentes de novo.");
         const next = executions.map((e) => (e.id === updated.id ? { ...e, ...updated } : e));
         setExecutions(next);
         setComment("");
@@ -191,6 +194,12 @@ export function ExecuteRunner(props: {
           <ProgressBar summary={summary} />
         </div>
       </div>
+
+      {notice && (
+        <p className="mb-3 rounded-lg border border-passed/40 bg-passed/10 px-4 py-2.5 text-sm" role="status">
+          {notice}
+        </p>
+      )}
 
       <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
         <Card className="overflow-hidden">

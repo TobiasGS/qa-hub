@@ -79,39 +79,40 @@ interface Db {
   executions: TestExecution[];
   links: LinkReference[];
   comments: Comment[];
+  planTags: Record<number, string[]>;
   seq: number;
 }
 
 const PLAN_CASES: Record<string, [string, string, number][]> = {
   Checkout: [
-    ["SHOP-101", "Finalizar compra com cartão de crédito", 1],
-    ["SHOP-101", "Finalizar compra com Pix", 1],
-    ["SHOP-102", "Aplicar cupom de desconto válido", 2],
-    ["SHOP-102", "Rejeitar cupom expirado", 2],
-    ["SHOP-103", "Calcular frete por CEP", 1],
-    ["SHOP-103", "Exibir erro para CEP inválido", 3],
-    ["SHOP-104", "Alterar quantidade no carrinho", 2],
+    ["jira-101", "Finalizar compra com cartão de crédito", 1],
+    ["jira-101", "Finalizar compra com Pix", 1],
+    ["jira-102", "Aplicar cupom de desconto válido", 2],
+    ["jira-102", "Rejeitar cupom expirado", 2],
+    ["jira-103", "Calcular frete por CEP", 1],
+    ["jira-103", "Exibir erro para CEP inválido", 3],
+    ["jira-104", "Alterar quantidade no carrinho", 2],
   ],
   "Cadastro e Login": [
-    ["SHOP-201", "Cadastrar usuário com e-mail", 1],
-    ["SHOP-201", "Impedir cadastro com e-mail duplicado", 2],
-    ["SHOP-202", "Login com senha correta", 1],
-    ["SHOP-202", "Bloquear após 5 tentativas erradas", 1],
-    ["SHOP-203", "Recuperar senha por e-mail", 2],
+    ["jira-201", "Cadastrar usuário com e-mail", 1],
+    ["jira-201", "Impedir cadastro com e-mail duplicado", 2],
+    ["jira-202", "Login com senha correta", 1],
+    ["jira-202", "Bloquear após 5 tentativas erradas", 1],
+    ["jira-203", "Recuperar senha por e-mail", 2],
     ["", "Logout limpa a sessão", 3],
   ],
   Busca: [
-    ["SHOP-301", "Buscar produto por nome", 1],
-    ["SHOP-301", "Buscar com erro de digitação", 2],
-    ["SHOP-302", "Filtrar por faixa de preço", 2],
-    ["SHOP-302", "Ordenar por mais vendidos", 3],
-    ["SHOP-303", "Paginação dos resultados", 3],
+    ["jira-301", "Buscar produto por nome", 1],
+    ["jira-301", "Buscar com erro de digitação", 2],
+    ["jira-302", "Filtrar por faixa de preço", 2],
+    ["jira-302", "Ordenar por mais vendidos", 3],
+    ["jira-303", "Paginação dos resultados", 3],
   ],
   "Regressão Mobile": [
-    ["SHOP-401", "Menu lateral abre e fecha", 2],
-    ["SHOP-401", "Carrinho persiste após recarregar", 1],
-    ["SHOP-402", "Layout do checkout em 375px", 1],
-    ["SHOP-402", "Teclado numérico no campo CEP", 3],
+    ["jira-401", "Menu lateral abre e fecha", 2],
+    ["jira-401", "Carrinho persiste após recarregar", 1],
+    ["jira-402", "Layout do checkout em 375px", 1],
+    ["jira-402", "Teclado numérico no campo CEP", 3],
   ],
 };
 
@@ -151,6 +152,7 @@ function seed(): Db {
     executions: [],
     links: [],
     comments: [],
+    planTags: {},
     seq: 1000,
   };
   const userId = (username: string | null) => db.users.find((u) => u.username === username)?.id ?? null;
@@ -163,7 +165,7 @@ function seed(): Db {
   const buildsOf = (version: number) => db.builds.filter((b) => b.version === version);
 
   // Cards de exemplo: Checkout ligado a um card do Azure, Cadastro a um épico do Jira.
-  const PLAN_CARD: Record<string, string> = { Checkout: "AB#86", "Cadastro e Login": "SHOP-200" };
+  const PLAN_CARD: Record<string, string> = { Checkout: "azure-86", "Cadastro e Login": "jira-200" };
 
   let caseId = 1;
   Object.entries(PLAN_CASES).forEach(([name, cases], pi) => {
@@ -272,7 +274,7 @@ function seed(): Db {
   for (const e of [...db.executions].reverse()) {
     if (e.status === 5 && FLAKY.has(e.case__summary) && !db.links.some((l) => db.executions.find((x) => x.id === l.execution)?.case === e.case)) {
       const plan = db.plans.find((p) => p.id === db.runs.find((r) => r.id === e.run)?.plan);
-      const key = plan?.extra_link?.startsWith("AB#") ? `AB#${bugNo++}` : `SHOP-${bugNo++}`;
+      const key = plan?.extra_link?.startsWith("azure-") ? `azure-${bugNo++}` : `jira-${bugNo++}`;
       db.links.push({
         id: db.seq++,
         execution: e.id,
@@ -296,7 +298,7 @@ function clonePlanTypes() {
 }
 
 // Sobrevive ao hot reload do Next em dev. A versão invalida dados de um formato antigo.
-const DB_VERSION = 6;
+const DB_VERSION = 8;
 const g = globalThis as unknown as { __kiwiMock?: Db; __kiwiMockVersion?: number };
 if (g.__kiwiMockVersion !== DB_VERSION) {
   g.__kiwiMock = seed();
@@ -473,6 +475,18 @@ export function mockKiwi(username: string): KiwiApi {
       db.runs.push(r);
       return clone(r);
     },
+    updateRun: async (id, { stop_date }) => {
+      const r = find(db.runs, id, "Run");
+      r.stop_date = stop_date === null ? null : new Date(stop_date.replace(" ", "T") + "Z").toISOString();
+      return clone(r);
+    },
+    planTags: async (planId) => [...(db.planTags[planId] ?? [])],
+    addPlanTag: async (planId, tag) => {
+      db.planTags[planId] = [...new Set([...(db.planTags[planId] ?? []), tag])];
+    },
+    removePlanTag: async (planId, tag) => {
+      db.planTags[planId] = (db.planTags[planId] ?? []).filter((t) => t !== tag);
+    },
     addCaseToRun: async (runId, caseId) => {
       const run = find(db.runs, runId, "Run");
       const c = find(db.cases, caseId, "Caso");
@@ -526,7 +540,7 @@ export function mockKiwi(username: string): KiwiApi {
       db.links = db.links.filter((l) => l.id !== linkId);
     },
     reportBug: async (id) => {
-      const key = `SHOP-${db.seq++}`;
+      const key = `jira-${db.seq++}`;
       const url = exampleBugUrl(key);
       db.links.push({ id: db.seq++, execution: id, name: key, url, is_defect: true, created_on: now() });
       return url;

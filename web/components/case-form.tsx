@@ -36,7 +36,7 @@ export function CaseForm({
   const [requirement, setRequirement] = useState(testCase?.requirement ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const invalid = parseRequirements(requirement).invalid;
+  const invalid = parseRequirements(requirement, templates.jiraProject).invalid;
   const confirmed = options.statuses.find((s) => s.name === "CONFIRMED")?.id;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -76,7 +76,7 @@ export function CaseForm({
         className="sm:col-span-3"
         hint={
           invalid.length ? (
-            <span className="text-failed">Use SHOP-123 (Jira), AB#456 (Azure) ou cole o link do card, separados por vírgula.</span>
+            <span className="text-failed">Use azure-86, jira-123 ou cole o link do card, separados por vírgula.</span>
           ) : (
             <RequirementChips value={requirement} templates={templates} />
           )
@@ -85,9 +85,9 @@ export function CaseForm({
         <TextInput
           value={requirement}
           onChange={(e) => setRequirement(e.target.value)}
-          // Link colado vira chave ao sair do campo (ex.: ...?workitem=86 → AB#86).
-          onBlur={() => !invalid.length && setRequirement(formatRequirements(parseRequirements(requirement).keys) ?? "")}
-          placeholder="AB#86, SHOP-101 ou link do card"
+          // Link colado ou formato antigo vira chave ao sair do campo (ex.: ...?workitem=86 ou AB#86 → azure-86).
+          onBlur={() => !invalid.length && setRequirement(formatRequirements(parseRequirements(requirement, templates.jiraProject).keys) ?? "")}
+          placeholder="azure-86, jira-101 ou link do card"
           aria-invalid={invalid.length > 0}
         />
       </Field>
