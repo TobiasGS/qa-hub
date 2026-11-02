@@ -24,10 +24,23 @@ const BLOCK = /<!-- qahub-diagnostico ([\s\S]*?) -->[\s\S]*?<!-- \/qahub-diagnos
 const MAX_FAILURES = 30;
 const MAX_TEXT = 1500;
 
+/**
+ * A API do Kiwi devolve as notas com HTML escapado (`&lt;!--`, `&quot;`), embora guarde
+ * o texto original. Desfaz isso antes de ler ou regravar (senão o bloco não é achado,
+ * duplica e o resto das notas vai sendo escapado de novo a cada análise).
+ */
+export const unescapeKiwi = (text: string | null | undefined) =>
+  (text ?? "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&amp;/g, "&");
+
 export const aiConfigured = () => !!diagnoseUrl() && !!process.env.N8N_WEBHOOK_SECRET;
 
 export function readDiagnosis(notes: string | null | undefined): SavedDiagnosis | null {
-  const m = notes?.match(BLOCK);
+  const m = unescapeKiwi(notes).match(BLOCK);
   if (!m) return null;
   try {
     return JSON.parse(m[1]) as SavedDiagnosis;
@@ -48,7 +61,7 @@ export function writeDiagnosis(notes: string | null | undefined, d: SavedDiagnos
     .filter(Boolean)
     .join("\n");
   const block = `${OPEN}${json} -->\n${text}\n${CLOSE}\n`;
-  const rest = (notes ?? "").replace(BLOCK, "");
+  const rest = unescapeKiwi(notes).replace(BLOCK, "");
   return rest.trim() ? `${block}\n${rest.trim()}\n` : block;
 }
 
