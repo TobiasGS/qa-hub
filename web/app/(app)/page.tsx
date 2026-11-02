@@ -1,3 +1,4 @@
+import { SignalBadges } from "@/components/signal-badges";
 import { ArrowRight, Bug, ExternalLink, FolderKanban, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { Filters } from "@/components/filters";
@@ -47,7 +48,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Link>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label="Taxa de sucesso" value={formatRate(d.latest.passRate)} hint={buildHint}>
           {delta !== null && (
             <span className={cn("text-xs font-medium tabular", delta >= 0 ? "text-passed-text" : "text-failed")}>
@@ -58,6 +59,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Stat label="Executados" value={`${d.latest.executed}/${d.latest.total}`} hint={project ? "casos na build atual" : "casos nas builds atuais"} />
         <Stat label="Tempo médio por caso" value={d.avgSeconds === null ? "—" : formatDuration(d.avgSeconds)} hint="execuções manuais" />
         <Stat label="Runs abertos" value={String(d.openRuns)} hint="sem data de término" />
+        <Stat label="Regressões" value={String(d.regressions)} hint="falham na última build e passavam antes" />
         <Stat label="Bugs vinculados" value={String(d.defectCount)} hint={`nas últimas builds`} />
       </div>
 
@@ -121,6 +123,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <span className="min-w-0 flex-1 truncate text-sm" title={f.summary}>
                     {f.summary}
                   </span>
+                  {f.flaky && <SignalBadges tags={["flaky"]} />}
                   <span className="shrink-0 text-xs text-fg-2 tabular">
                     {f.failed}/{f.total}
                   </span>

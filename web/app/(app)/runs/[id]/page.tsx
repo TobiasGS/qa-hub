@@ -1,13 +1,19 @@
 import { Bug, Play } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { LiveRefresh } from "@/components/live-refresh";
 import { RetestButton } from "@/components/retest-button";
+import { RunDiagnosis } from "@/components/run-diagnosis";
+import { SignalBadges } from "@/components/signal-badges";
 import { formatRate, OutcomeLegend, ProgressBar, StatusBadge } from "@/components/status";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
+import { failureSignals } from "@/lib/diagnosis";
+import { latestJob } from "@/lib/jobs";
 import { outcomeOf, summarize } from "@/lib/metrics";
+import { aiConfigured, readDiagnosis, type SavedDiagnosis } from "@/lib/run-diagnosis";
 import { requireKiwi } from "@/lib/session";
 import { parseKiwiDate } from "@/lib/timer";
-import { canSeeRun, visibleSet } from "@/lib/visibility";
+import { canEditPlan, canSeeRun, visibleSet } from "@/lib/visibility";
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { kiwi, viewer } = await requireKiwi();
@@ -21,6 +27,10 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const failedCount = s.failed + s.blocked;
   // Cada bug criado ou vinculado numa execução é um link "defeito" no Kiwi.
   const bugs = links.filter((l) => l.is_defect);
+  const signals = failedCount > 0 ? await failureSignals(kiwi, run, { executions, statuses, links }) : [];
+  const signalOf = new Map(signals.map((sg) => [sg.executionId, sg]));
+  const job = latestJob<SavedDiagnosis, null>("diagnosis", run.id);
+  const caseLinks = Object.fromEntries(sorted.map((e, i) => [e.id, { index: i, title: `TC-${e.case} ${e.case__summary}` }]));
 
   return (
     <>
@@ -32,7 +42,8 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             : "em andamento"
         }`}
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {!run.stop_date && <LiveRefresh />}
             {failedCount > 0 && <RetestButton run={run} failedCount={failedCount} builds={builds} />}
             <ButtonLink href={`/runs/${run.id}/execute`} variant="primary">
               <Play className="size-4" /> Executar
@@ -51,6 +62,19 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         </div>
         <ProgressBar summary={s} className="h-3" />
       </Card>
+
+      {failedCount > 0 && (
+        <RunDiagnosis
+          runId={run.id}
+          initial={{
+            saved: readDiagnosis(run.notes),
+            job: job && { status: job.status, elapsed: Math.round(((job.finishedAt ?? Date.now()) - job.startedAt) / 1000), ...(job.error ? { error: job.error } : {}) },
+          }}
+          cases={caseLinks}
+          canAnalyze={!!plan && canEditPlan(viewer, plan) && aiConfigured()}
+          configured={aiConfigured()}
+        />
+      )}
 
       <Card>
         {sorted.length === 0 ? (
@@ -77,7 +101,10 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
                         </Link>
                       </td>
                       <td className="px-3 py-3">
-                        <StatusBadge outcome={outcomeOf(e.status, statuses)} />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <StatusBadge outcome={outcomeOf(e.status, statuses)} />
+                          {signalOf.has(e.id) && <SignalBadges tags={signalOf.get(e.id)!.tags} lastPassBuild={signalOf.get(e.id)!.lastPassBuild} />}
+                        </div>
                       </td>
                       <td className="hidden px-3 py-3 text-fg-2 md:table-cell">{e.tested_by__username ?? e.assignee__username ?? "—"}</td>
                       <td className="px-5 py-3">

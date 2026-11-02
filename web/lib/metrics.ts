@@ -1,4 +1,5 @@
 import type { ExecutionStatus, KiwiApi, LinkReference, TestCase, TestExecution, TestRun } from "./kiwi/types";
+import { flakyCaseIds, signalsFor } from "./diagnosis";
 import { parseRequirements } from "./requirements";
 import { durationOf, parseKiwiDate } from "./timer";
 import type { Visible } from "./visibility";
@@ -132,7 +133,23 @@ export async function dashboardData(kiwi: KiwiApi, { project, visible }: { proje
     if (o === "failed" || o === "blocked") row.failed++;
     fails.set(e.case, row);
   }
-  const topFailures = [...fails.values()].filter((r) => r.failed > 0).sort((a, b) => b.failed - a.failed || b.failed / b.total - a.failed / a.total).slice(0, 5);
+  const flaky = flakyCaseIds(executions, statuses);
+  const topFailures = [...fails.values()]
+    .filter((r) => r.failed > 0)
+    .sort((a, b) => b.failed - a.failed || b.failed / b.total - a.failed / a.total)
+    .slice(0, 5)
+    .map((r) => ({ ...r, flaky: flaky.has(r.caseId) }));
+
+  // Regressões na última build: casos que falharam nela e passavam na build anterior.
+  const regressions = new Set(
+    latestExecutions
+      .filter((e) => {
+        const o = outcomeOf(e.status, statuses);
+        if (o !== "failed" && o !== "blocked") return false;
+        return signalsFor(e, executions.filter((x) => x.case === e.case && x.id !== e.id), statuses, true).tags.includes("regression");
+      })
+      .map((e) => e.case),
+  ).size;
 
   const execById = new Map(executions.map((e) => [e.id, e]));
   const recentDefects = [...defects]
@@ -168,6 +185,7 @@ export async function dashboardData(kiwi: KiwiApi, { project, visible }: { proje
     avgSeconds: avgManual(latestExecutions),
     openRuns: runs.filter((r) => !r.stop_date).length,
     defectCount: new Set(defects.map((d) => d.url)).size,
+    regressions,
     trend,
     runProgress,
     topFailures,

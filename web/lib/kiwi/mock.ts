@@ -475,9 +475,10 @@ export function mockKiwi(username: string): KiwiApi {
       db.runs.push(r);
       return clone(r);
     },
-    updateRun: async (id, { stop_date }) => {
+    updateRun: async (id, { stop_date, notes }) => {
       const r = find(db.runs, id, "Run");
-      r.stop_date = stop_date === null ? null : new Date(stop_date.replace(" ", "T") + "Z").toISOString();
+      if (stop_date !== undefined) r.stop_date = stop_date === null ? null : new Date(stop_date.replace(" ", "T") + "Z").toISOString();
+      if (notes !== undefined) r.notes = notes;
       return clone(r);
     },
     planTags: async (planId) => [...(db.planTags[planId] ?? [])],

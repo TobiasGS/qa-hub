@@ -1,5 +1,6 @@
 import { ApiError, apiRoute, readJson, toId } from "@/lib/api";
 import { requireExecutionVisible } from "@/lib/visibility";
+import { autoDiagnose } from "@/lib/run-diagnosis";
 import { syncRunState } from "@/lib/run-state";
 import { kiwiDate, timerComment } from "@/lib/timer";
 
@@ -24,5 +25,10 @@ export const PATCH = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id
   if (elapsed !== null) await kiwi.addComment(executionId, timerComment("finish", elapsed, execution.status__name));
   // Último caso executado → run concluído (e tarefa do plano no Azure: Testado / Teste Recusado).
   const run = await syncRunState(kiwi, execution.run);
+  // Concluído com falhas: a IA já começa o diagnóstico (em segundo plano).
+  if (run === "closed") {
+    const [closed] = await kiwi.runs({ id: execution.run });
+    if (closed) autoDiagnose(kiwi, closed, viewer.username);
+  }
   return { execution, run };
 });

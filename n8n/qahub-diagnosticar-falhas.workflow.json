@@ -1,0 +1,165 @@
+{
+  "name": "QA Hub · Diagnosticar falhas",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "qahub-diagnosticar-falhas",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f0821418-0070-4d38-80c9-15ef9683703c",
+      "name": "Webhook (QA Hub)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "3d0a6245-ce1a-46d5-91fe-cefc084d509a",
+      "notes": "Crie uma credencial Header Auth com Name = X-QAHub-Secret e Value = o N8N_WEBHOOK_SECRET do QA Hub."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Você é um analista de QA sênior. Analise as falhas do run abaixo e agrupe-as por causa provável.\n\nRun #{{ $json.body.run.id }}: {{ $json.body.run.title }} (build {{ $json.body.run.build }}, plano {{ $json.body.run.plan }})\n\nHistória do card: {{ $json.body.story ? ($json.body.story.key + ' - ' + $json.body.story.title + '\\n' + $json.body.story.description + '\\nCritérios: ' + $json.body.story.acceptanceCriteria) : '(sem história ligada)' }}\n\nFalhas (JSON; \"execution\" é o id que você deve citar; \"signals\" vem do histórico: Regressão = passava na build anterior, Recorrente = falhou 2+ das últimas 5, Instável = alterna passou/falhou, Nova = primeira execução, Sem bug = nenhum bug vinculado):\n{{ JSON.stringify($json.body.failures) }}\n\nRegras:\n- Escreva em português do Brasil, de forma objetiva.\n- Agrupe falhas que parecem ter a mesma causa (ex.: mesma tela, mesma mensagem de erro, mesmo dado). Uma falha pode ficar sozinha num grupo.\n- \"category\": \"produto\" (defeito no sistema), \"ambiente\" (servidor fora, lentidão, configuração), \"dados\" (massa de teste), \"caso_desatualizado\" (o caso não reflete mais o sistema) ou \"instavel\" (teste instável).\n- \"confidence\": \"alta\", \"média\" ou \"baixa\". NÃO invente causa sem evidência: se os comentários e passos não bastam, use \"baixa\" e diga o que falta investigar.\n- \"evidence\": cite o que nos comentários, passos ou sinais sustenta a hipótese.\n- \"action\": a próxima ação concreta (ex.: abrir bug com X, revisar o passo Y do caso, reexecutar após corrigir o ambiente).\n- \"summary\": 1 a 3 frases sobre o run como um todo.\n- Responda APENAS com JSON válido, sem texto antes ou depois, neste formato:\n{\"summary\":\"...\",\"groups\":[{\"title\":\"...\",\"category\":\"produto\",\"confidence\":\"média\",\"executions\":[123],\"evidence\":\"...\",\"action\":\"...\"}]}\n",
+        "hasOutputParser": false,
+        "needsFallback": true
+      },
+      "id": "1e65d0c0-312c-43e2-887d-b298a6ee7971",
+      "name": "Diagnosticar falhas (IA)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        260,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.8-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "478ce740-7193-444f-94d7-73c8424420a9",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        260,
+        220
+      ],
+      "notes": "Escolha a credencial do Google Gemini. Pode trocar o modelo (ou o nó inteiro por Anthropic, OpenAI, OpenRouter…)."
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "27062af7-bbf4-4e0d-b384-9a8240dcd0a4",
+      "name": "Google Gemini (reserva)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        420,
+        220
+      ],
+      "notes": "Modelo reserva: usado quando o principal falha (ex.: 503 por excesso de demanda)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai o JSON do diagnóstico da resposta da IA e normaliza para o contrato do QA Hub.\nconst out = $input.first().json;\nlet text = String(out.text ?? out.output ?? out.response ?? '');\ntext = text.replace(/<think>[\\s\\S]*?<\\/think>/gi, '').replace(/```(?:json)?/gi, '').trim();\nconst start = text.indexOf('{');\nconst end = text.lastIndexOf('}');\nif (start < 0 || end <= start) throw new Error('A IA não devolveu JSON: ' + text.slice(0, 200));\n// Modelos às vezes quebram linha \"de verdade\" dentro das strings do JSON: escapa.\nlet json = '', inString = false, escaped = false;\nfor (const ch of text.slice(start, end + 1)) {\n  if (inString && !escaped && (ch === '\\n' || ch === '\\r' || ch === '\\t')) {\n    json += ch === '\\n' ? '\\\\n' : ch === '\\r' ? '' : '\\\\t';\n    continue;\n  }\n  if (ch === '\"' && !escaped) inString = !inString;\n  escaped = ch === '\\\\' && !escaped;\n  json += ch;\n}\nlet data;\ntry {\n  data = JSON.parse(json);\n} catch (e) {\n  throw new Error('JSON inválido na resposta da IA: ' + e.message);\n}\nconst groups = (Array.isArray(data.groups) ? data.groups : [])\n  .filter((g) => g && g.title && Array.isArray(g.executions) && g.executions.length)\n  .map((g) => ({\n    title: String(g.title).trim(),\n    category: String(g.category || 'produto').toLowerCase(),\n    confidence: String(g.confidence || 'baixa').toLowerCase(),\n    executions: g.executions.map(Number).filter(Number.isFinite),\n    evidence: String(g.evidence || '').trim(),\n    action: String(g.action || '').trim(),\n  }));\nif (!groups.length) throw new Error('Nenhum grupo válido na resposta da IA');\nreturn [{ json: { summary: String(data.summary || '').trim(), groups } }];\n"
+      },
+      "id": "c0b4a799-6b96-4c96-a163-c8b529ae99a3",
+      "name": "Extrair JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "84b4e613-4818-43a9-96b2-1a70c1b07136",
+      "name": "Responder ao QA Hub",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        800,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (QA Hub)": {
+      "main": [
+        [
+          {
+            "node": "Diagnosticar falhas (IA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Diagnosticar falhas (IA)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini (reserva)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Diagnosticar falhas (IA)",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Diagnosticar falhas (IA)": {
+      "main": [
+        [
+          {
+            "node": "Extrair JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair JSON": {
+      "main": [
+        [
+          {
+            "node": "Responder ao QA Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

@@ -41,10 +41,17 @@ export function parseGeneratedCases(data: unknown): GeneratedCase[] {
   return cases;
 }
 
-export async function generateCasesViaN8n(payload: StoryPayload): Promise<GeneratedCase[]> {
-  const url = process.env.N8N_WEBHOOK_URL;
+/** Webhook do diagnóstico: N8N_DIAGNOSE_URL ou, sem ele, o mesmo n8n do N8N_WEBHOOK_URL. */
+export function diagnoseUrl(): string | undefined {
+  if (process.env.N8N_DIAGNOSE_URL) return process.env.N8N_DIAGNOSE_URL;
+  const base = process.env.N8N_WEBHOOK_URL;
+  return base ? base.replace(/\/webhook\/[^/?#]+/, "/webhook/qahub-diagnosticar-falhas") : undefined;
+}
+
+/** Chama um workflow do n8n (segredo no cabeçalho) e devolve o JSON da resposta, com mensagens claras. */
+async function callN8n(url: string | undefined, workflow: string, payload: unknown): Promise<unknown> {
   const secret = process.env.N8N_WEBHOOK_SECRET;
-  if (!url || !secret) throw new ApiError("Geração por IA não configurada: defina N8N_WEBHOOK_URL e N8N_WEBHOOK_SECRET.");
+  if (!url || !secret) throw new ApiError("IA não configurada: defina N8N_WEBHOOK_URL e N8N_WEBHOOK_SECRET.");
 
   let res: Response;
   try {
@@ -53,7 +60,7 @@ export async function generateCasesViaN8n(payload: StoryPayload): Promise<Genera
       headers: { "Content-Type": "application/json", "X-QAHub-Secret": secret },
       body: JSON.stringify(payload),
       cache: "no-store",
-      // Roda em segundo plano (lib/generation-jobs.ts): com a IA sobrecarregada, as
+      // Roda em segundo plano (lib/jobs.ts): com a IA sobrecarregada, as
       // novas tentativas do workflow podem passar de 5 minutos.
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -63,15 +70,62 @@ export async function generateCasesViaN8n(payload: StoryPayload): Promise<Genera
     throw new ApiError("Não consegui falar com o n8n. Ele está ligado? Rode o \"Iniciar QA Hub.cmd\" ou abra o n8n.", 502);
   }
   if (res.status === 401 || res.status === 403) throw new ApiError("O n8n recusou o acesso: o segredo do webhook não confere (N8N_WEBHOOK_SECRET × credencial Header Auth).", 502);
-  if (res.status === 404) throw new ApiError("Webhook não encontrado no n8n: importe e ATIVE o workflow \"QA Hub · Gerar casos da história\".", 502);
+  if (res.status === 404) throw new ApiError(`Webhook não encontrado no n8n: importe e PUBLIQUE o workflow "${workflow}".`, 502);
   const text = await res.text();
   if (res.status === 500) throw new ApiError("O workflow do n8n falhou, em geral porque a IA está indisponível ou sobrecarregada. Tente de novo em alguns minutos; o detalhe fica em Executions, no n8n.", 502);
-  if (!res.ok)throw new ApiError(`O n8n respondeu ${res.status}: ${text.slice(0, 200)}`, 502);
-  let data: unknown;
+  if (!res.ok) throw new ApiError(`O n8n respondeu ${res.status}: ${text.slice(0, 200)}`, 502);
   try {
-    data = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
     throw new ApiError("O n8n não devolveu JSON. Confira o nó \"Respond to Webhook\" do workflow.", 502);
   }
-  return parseGeneratedCases(data);
+}
+
+export async function generateCasesViaN8n(payload: StoryPayload): Promise<GeneratedCase[]> {
+  return parseGeneratedCases(await callN8n(process.env.N8N_WEBHOOK_URL, "QA Hub · Gerar casos da história", payload));
+}
+
+// ---- Diagnóstico de falhas (n8n/qahub-diagnosticar-falhas.workflow.json) ----
+
+export const DIAGNOSIS_CATEGORIES = ["produto", "ambiente", "dados", "caso_desatualizado", "instavel"] as const;
+export const CONFIDENCES = ["alta", "média", "baixa"] as const;
+
+export interface DiagnosisGroup {
+  title: string;
+  category: (typeof DIAGNOSIS_CATEGORIES)[number];
+  confidence: (typeof CONFIDENCES)[number];
+  executions: number[];
+  evidence: string;
+  action: string;
+}
+
+export interface Diagnosis {
+  summary: string;
+  groups: DiagnosisGroup[];
+}
+
+const cut = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+
+/** Valida a resposta da IA: só execuções do run, categorias e confianças conhecidas, textos limitados. */
+export function parseDiagnosis(data: unknown, executionIds: number[]): Diagnosis {
+  const d = (Array.isArray(data) ? data[0] : data) as { summary?: unknown; groups?: unknown };
+  if (!d || !Array.isArray(d.groups)) throw new ApiError("O n8n respondeu num formato inesperado (falta a lista \"groups\")", 502);
+  const known = new Set(executionIds);
+  const groups = (d.groups as Record<string, unknown>[])
+    .map((g) => ({
+      title: cut(g.title, 160),
+      category: DIAGNOSIS_CATEGORIES.find((c) => norm(c) === norm(g.category)) ?? "produto",
+      confidence: CONFIDENCES.find((c) => norm(c) === norm(g.confidence)) ?? "baixa",
+      executions: (Array.isArray(g.executions) ? g.executions : []).map(Number).filter((id) => known.has(id)),
+      evidence: cut(g.evidence, 800),
+      action: cut(g.action, 400),
+    }))
+    .filter((g) => g.title && g.executions.length)
+    .slice(0, 12);
+  if (!groups.length) throw new ApiError("A IA não devolveu nenhum grupo de falhas aproveitável. Tente de novo.", 502);
+  return { summary: cut(d.summary, 600), groups };
+}
+
+export async function diagnoseViaN8n(payload: unknown, executionIds: number[]): Promise<Diagnosis> {
+  return parseDiagnosis(await callN8n(diagnoseUrl(), "QA Hub · Diagnosticar falhas", payload), executionIds);
 }

@@ -1,17 +1,19 @@
 import { ApiError, apiRoute, toId } from "@/lib/api";
 import { AzureError, azureConfig, getStory } from "@/lib/azure";
-import { findGeneration, startGeneration, type GenerationJob } from "@/lib/generation-jobs";
-import { generateCasesViaN8n } from "@/lib/n8n";
+import { findJob, startJob, type Job } from "@/lib/jobs";
+import { generateCasesViaN8n, type GeneratedCase } from "@/lib/n8n";
 import { planCardId } from "@/lib/plan-task";
 import { requirePlanEditable } from "@/lib/visibility";
 
 /** O que o diálogo recebe ao iniciar e a cada consulta. */
-const view = (job: GenerationJob) => ({
+type CasesJob = Job<GeneratedCase[], { key: string; title: string; type: string }>;
+
+const view = (job: CasesJob) => ({
   job: job.id,
   status: job.status,
-  story: job.story,
+  story: job.meta,
   elapsed: Math.round(((job.finishedAt ?? Date.now()) - job.startedAt) / 1000),
-  ...(job.status === "done" ? { cases: job.cases } : {}),
+  ...(job.status === "done" ? { cases: job.result } : {}),
   ...(job.status === "error" ? { error: job.error } : {}),
 });
 
@@ -40,7 +42,7 @@ export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, _req, { id
 
   const existing = await kiwi.cases({ plan: plan.id });
   const key = `azure-${cardId}`;
-  const job = startGeneration({ planId: plan.id, owner: viewer.username, story: { key, title: story.title, type: story.type } }, () =>
+  const job = startJob({ kind: "cases", scope: plan.id, owner: viewer.username, meta: { key, title: story.title, type: story.type } }, () =>
     generateCasesViaN8n({
       story: { key, title: story.title, description: story.description, acceptanceCriteria: story.acceptanceCriteria },
       format: "gherkin",
@@ -55,7 +57,7 @@ export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, _req, { id
 export const GET = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id }) => {
   const plan = await requirePlanEditable(kiwi, viewer, toId(id));
   const jobId = new URL(req.url).searchParams.get("job") ?? "";
-  const job = findGeneration(jobId, plan.id, viewer.username);
+  const job = findJob<GeneratedCase[], CasesJob["meta"]>("cases", jobId, plan.id, viewer.username);
   if (!job) throw new ApiError("Geração não encontrada (o QA Hub pode ter reiniciado). Clique em Gerar de novo.", 404);
   return view(job);
 });

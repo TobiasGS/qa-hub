@@ -27,6 +27,7 @@ navegador ──► QA Hub (Next.js, qa.seu-dominio.com)
   - **evidências**: prints, imagens, vídeos de até 100 MB, PDF, logs e HAR, com arrastar e soltar, miniaturas e player;
   - botão **Abrir bug**: com card do Azure no plano, o bug nasce no Azure DevOps como **filho do card**, na mesma sprint.
 - **Matriz de rastreabilidade:** card (história do Jira/Azure) → casos → último resultado → bugs.
+- **Diagnóstico de falhas:** cada falha do run ganha selos (Regressão, Recorrente, Instável, Nova, Sem bug) e, quando o run termina com falhas, a IA agrupa as falhas por causa provável e sugere o que fazer. O run em andamento atualiza sozinho ("ao vivo").
 
 **Por que um front separado em vez de mexer no layout do Kiwi:** as atualizações do Kiwi continuam simples, sem conflitos de template. O QA Hub só chama a API, então não é obra derivada sob a GPL do Kiwi. A UI original fica disponível para a administração.
 
@@ -210,6 +211,22 @@ Na página de um plano com card do Azure, o botão **Gerar casos da história** 
 4. **Publique** o workflow (botão *Publish*). Sem isso, o webhook responde 404 e o QA Hub avisa. Cada alteração no workflow só vale depois de publicar de novo.
 
 `N8N_WEBHOOK_URL` aponta para `http://localhost:5678/webhook/qahub-gerar-casos` em dev e para `http://host.docker.internal:5678/webhook/qahub-gerar-casos` no container (o compose já mapeia `host.docker.internal`). O iniciador sobe o n8n junto. Se `n8n.seu-dominio.com` também estiver publicado no Tunnel, proteja-o com o Cloudflare Access: o QA Hub não precisa dele, porque chama o n8n por dentro do PC.
+
+### Diagnóstico de falhas
+
+Na tela do run, cada caso que falhou ou ficou bloqueado ganha selos calculados pelo histórico do Kiwi, sem IA:
+
+| Selo | Quando aparece |
+| --- | --- |
+| **Regressão** | a execução anterior, em outra build, passou |
+| **Recorrente** | falhou em 2 ou mais das últimas 5 execuções |
+| **Instável** | alternou entre passou e falhou 2 ou mais vezes nas últimas 6 |
+| **Nova** | primeira execução do caso |
+| **Sem bug** | falhou e ainda não tem bug vinculado |
+
+Quando o run é **concluído com falhas**, o QA Hub manda para o workflow **QA Hub · Diagnosticar falhas** do n8n (`n8n/qahub-diagnosticar-falhas.workflow.json`) os passos, os comentários (sem as linhas do cronômetro), os bugs, os sinais e a história do card. A IA devolve as falhas agrupadas por causa provável (produto, ambiente, dados, caso desatualizado ou teste instável), com confiança, evidência e a ação sugerida. O resultado fica salvo nas **notas do run** no Kiwi, num bloco próprio (o resto das notas é preservado), e aparece no cartão "Diagnóstico de falhas". O dono do plano ou um admin pode pedir **Analisar de novo**. É uma sugestão: revise antes de agir.
+
+O webhook usa o mesmo n8n e o mesmo segredo da geração de casos (`/webhook/qahub-diagnosticar-falhas`; outro endereço: `N8N_DIAGNOSE_URL`). Importe o workflow como o de casos e **publique**. No dashboard, "Casos que mais falham" marca os instáveis, e o número **Regressões** conta os casos que falham na última build e passavam antes.
 
 ### Cronômetro e histórico
 
