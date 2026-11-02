@@ -8,7 +8,7 @@ import { sameUser } from "./visibility";
 // tela consulta até terminar. Fica na memória do processo (um container só); some se
 // o QA Hub reiniciar.
 
-export type JobKind = "cases" | "diagnosis";
+export type JobKind = "cases" | "diagnosis" | "playwright";
 
 export interface Job<T, M = unknown> {
   id: string;

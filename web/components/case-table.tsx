@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Bot, Copy, Loader2, MoreHorizontal, Pencil, Plus, RotateCcw, Unlink } from "lucide-react";
+import { Ban, Bot, Code, Copy, Loader2, MoreHorizontal, Pencil, Plus, RotateCcw, Unlink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { TestCase } from "@/lib/kiwi/types";
@@ -10,6 +10,7 @@ import type { RequirementTemplates } from "@/lib/requirements";
 import { CaseForm, caseStatusLabel, type CaseOptions } from "./case-form";
 import { ConfirmDialog, Dialog } from "./dialog";
 import { GenerateCasesButton } from "./generate-cases-dialog";
+import { PlaywrightDialog } from "./playwright-dialog";
 import { RequirementChips } from "./requirement-chips";
 import { StatusBadge } from "./status";
 import { Badge, Button, cn, EmptyState } from "./ui";
@@ -17,7 +18,7 @@ import { Badge, Button, cn, EmptyState } from "./ui";
 type Action =
   | { kind: "new" }
   | { kind: "edit"; testCase: TestCase; clonedFrom?: TestCase }
-  | { kind: "remove" | "toggle"; testCase: TestCase }
+  | { kind: "remove" | "toggle" | "playwright"; testCase: TestCase }
   | null;
 
 const cloneTitle = (summary: string) => `${summary} (cópia)`.slice(0, 255);
@@ -120,6 +121,7 @@ export function CaseTable({
                     items={[
                       { label: "Editar", icon: Pencil, onClick: () => setAction({ kind: "edit", testCase: c }) },
                       { label: "Clonar caso", icon: Copy, onClick: () => cloneCase(c) },
+                      { label: "Gerar teste Playwright", icon: Code, onClick: () => setAction({ kind: "playwright", testCase: c }) },
                       { label: disabled ? "Reativar" : "Desativar", icon: disabled ? RotateCcw : Ban, onClick: () => setAction({ kind: "toggle", testCase: c }) },
                       { label: "Remover do plano", icon: Unlink, onClick: () => setAction({ kind: "remove", testCase: c }), danger: true },
                     ]}
@@ -152,6 +154,7 @@ export function CaseTable({
         />
       </Dialog>
 
+      {action?.kind === "playwright" && <PlaywrightDialog planId={planId} testCase={action.testCase} onClose={close} />}
       {action?.kind === "remove" && (
         <ConfirmDialog
           open
@@ -211,7 +214,7 @@ function RowMenu({ items }: { items: { label: string; icon: typeof Pencil; onCli
         <MoreHorizontal className="size-4" />
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg">
+        <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg">
           {items.map((it) => (
             <button
               key={it.label}

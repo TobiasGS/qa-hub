@@ -364,7 +364,26 @@ Em **Zero Trust → Access → Applications**, crie uma aplicação self-hosted 
 
 Para o Kiwi, adicione uma política **Bypass** nos caminhos `kiwi.seu-dominio.com/json-rpc/` e `kiwi.seu-dominio.com/xml-rpc/`. O QA Hub e o plugin do CI chamam a API por esses caminhos, e eles continuam exigindo usuário e senha do Kiwi. Se preferir travar a API também, crie um **Service Token** e configure `CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET` no QA Hub. O plugin do CI não envia esses cabeçalhos, então nesse caso o CI precisaria rodar numa rede liberada.
 
-## 5. Cypress no Azure Pipelines
+## 5. Testes automatizados (Playwright) com resultado no caso certo
+
+O projeto de testes fica num repositório **privado** (ex.: `qa-automacao` no Azure Repos), com o reporter do QA Hub. Cada teste leva o id do caso no título:
+
+```ts
+test("[TC-8] Filtrar relatório por um gestor específico", async ({ page }) => { … });
+```
+
+No fim da execução, o reporter faz `POST /api/automation/results` com `{ plan, build, pipelineUrl, results: [{ title, status, durationMs, error }] }` e o cabeçalho `X-QAHub-Token`. O QA Hub, com o usuário técnico (`KIWI_CI_USER`):
+- cria (ou reaproveita, se o pipeline rodar de novo na mesma build) o run **`<plano> — build <n> · automatizado`**;
+- marca cada caso como Passou ou Falhou, com o erro do Playwright e o link do pipeline num comentário;
+- conclui o run. A tarefa "Plano de Teste" do card muda de estado e, havendo falha, a IA faz o diagnóstico, como no teste manual.
+
+Testes sem `[TC-n]`, ou de casos fora do plano, voltam como `ignored` no log do pipeline.
+
+**Configurar no QA Hub:** `AUTOMATION_TOKEN`, `KIWI_CI_USER` e `KIWI_CI_PASSWORD` no `web/.env.production.local`. O usuário técnico fica no grupo **Tester** do Kiwi. Se o QA Hub estiver atrás do Cloudflare Access, crie um **Service Token** e uma aplicação com política **Service Auth** só para `qa.seu-dominio.com/api/automation`; o pipeline manda `CF-Access-Client-Id/Secret`.
+
+**Gerar o teste a partir do caso:** no menu ⋯ de um caso, **Gerar teste Playwright**. A IA (workflow `n8n/qahub-gerar-playwright.workflow.json`, que precisa ser importado e publicado) escreve o `*.spec.ts` a partir do Dado/Quando/Então, já com o `[TC-id]` no título, usando `getByRole`/`getByLabel` e marcando com `TODO` o que é palpite. Dicas de telas e seletores podem ir numa seção `## Automação` na descrição do plano. No diálogo dá para copiar, baixar e marcar o caso como automatizado.
+
+## 5b. Cypress no Azure Pipelines (plugin JUnit do Kiwi)
 
 1. No projeto Cypress, rode `npm i -D mocha-junit-reporter junit-report-merger` e copie o trecho de `ci/cypress.config.example.js`.
 2. No Azure DevOps, crie o variable group `kiwi-tcms` com `KIWI_USER` e `KIWI_PASSWORD` (marcada como secreta).

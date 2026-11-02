@@ -1,0 +1,165 @@
+{
+  "name": "QA Hub · Gerar teste Playwright",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "qahub-gerar-playwright",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "310cb743-6bc2-4b9b-9f58-5382aa949820",
+      "name": "Webhook (QA Hub)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "4a5eee4d-427e-4f4f-a131-910c2b0e426b",
+      "notes": "Crie uma credencial Header Auth com Name = X-QAHub-Secret e Value = o N8N_WEBHOOK_SECRET do QA Hub."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Você é um engenheiro de automação de testes sênior em Playwright com TypeScript. Escreva o teste do caso abaixo.\n\nCaso TC-{{ $json.body.case.id }}: {{ $json.body.case.title }}\nCard: {{ $json.body.case.requirement || '(sem card)' }}\nPlano: {{ $json.body.plan.name || '(sem plano)' }}\n\nPassos (Gherkin):\n{{ $json.body.case.steps }}\n\nDicas de seletores e telas do sistema (podem estar vazias):\n{{ $json.body.plan.hints || '(nenhuma)' }}\n\nRegras do código:\n- Um arquivo *.spec.ts com: import { expect, test } from \"@playwright/test\";\n- O título do teste DEVE começar com \"[TC-{{ $json.body.case.id }}] \" seguido do título do caso. Um teste por cenário do Gherkin (se houver mais de um, todos com o mesmo [TC-id]).\n- Use caminhos relativos em page.goto (o baseURL vem da configuração). O login já está feito pela sessão salva (storageState): NÃO faça login no teste.\n- Prefira page.getByRole, getByLabel e getByText com expressões regulares tolerantes (ex.: /gerar|consultar/i). Nada de XPath nem seletores CSS frágeis.\n- Cada passo vira um comentário com o texto do Gherkin (\"// Dado ...\", \"// Quando ...\", \"// Então ...\") seguido do código.\n- Onde o seletor, a rota ou o dado for um palpite, adicione \"// TODO(seletores): ...\" ou \"// TODO(dados): ...\" explicando o que conferir.\n- Asserções reais com expect (toBeVisible, toHaveText, toHaveCount, toHaveURL), nunca waitForTimeout.\n- Responda APENAS com JSON válido, sem texto antes ou depois, neste formato:\n{\"filename\":\"tc-{{ $json.body.case.id }}-nome-curto.spec.ts\",\"code\":\"import { expect, test } from \\\"@playwright/test\\\";\\n...\"}\n",
+        "hasOutputParser": false,
+        "needsFallback": true
+      },
+      "id": "bf79bd3b-d628-4deb-9837-88ce0ef2ce77",
+      "name": "Escrever teste (IA)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        260,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.8-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "e4196ada-0ff7-461b-8b01-7cb9f71c2bfc",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        260,
+        220
+      ],
+      "notes": "Escolha a credencial do Google Gemini. Pode trocar o modelo (ou o nó inteiro por Anthropic, OpenAI, OpenRouter…)."
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "b402fbfe-98ff-4aa0-84cc-2f90b3823ac7",
+      "name": "Google Gemini (reserva)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        420,
+        220
+      ],
+      "notes": "Modelo reserva: usado quando o principal falha (ex.: 503 por excesso de demanda)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai {filename, code} da resposta da IA.\nconst out = $input.first().json;\nlet text = String(out.text ?? out.output ?? out.response ?? '');\ntext = text.replace(/<think>[\\s\\S]*?<\\/think>/gi, '').trim();\nlet data = null;\nconst start = text.indexOf('{');\nconst end = text.lastIndexOf('}');\nif (start >= 0 && end > start) {\n  // Modelos às vezes quebram linha \"de verdade\" dentro das strings do JSON: escapa.\n  let json = '', inString = false, escaped = false;\n  for (const ch of text.slice(start, end + 1)) {\n    if (inString && !escaped && (ch === '\\n' || ch === '\\r' || ch === '\\t')) {\n      json += ch === '\\n' ? '\\\\n' : ch === '\\r' ? '' : '\\\\t';\n      continue;\n    }\n    if (ch === '\"' && !escaped) inString = !inString;\n    escaped = ch === '\\\\' && !escaped;\n    json += ch;\n  }\n  try { data = JSON.parse(json); } catch (e) { data = null; }\n}\n// Sem JSON: aceita o código num bloco de markdown.\nif (!data || !data.code) {\n  const m = text.match(/```(?:ts|typescript)?\\n([\\s\\S]*?)```/);\n  if (m) data = { filename: '', code: m[1] };\n}\nif (!data || !String(data.code || '').includes('test(')) throw new Error('A IA não devolveu um teste Playwright: ' + text.slice(0, 200));\nreturn [{ json: { filename: String(data.filename || ''), code: String(data.code).trim() + '\\n' } }];\n"
+      },
+      "id": "4954e9b0-8a32-467f-92b4-89cb9384ae56",
+      "name": "Extrair JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "29b78335-13b7-4631-ad0b-95de69840a50",
+      "name": "Responder ao QA Hub",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        800,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (QA Hub)": {
+      "main": [
+        [
+          {
+            "node": "Escrever teste (IA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Escrever teste (IA)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini (reserva)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Escrever teste (IA)",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Escrever teste (IA)": {
+      "main": [
+        [
+          {
+            "node": "Extrair JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair JSON": {
+      "main": [
+        [
+          {
+            "node": "Responder ao QA Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

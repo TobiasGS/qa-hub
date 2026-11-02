@@ -41,12 +41,15 @@ export function parseGeneratedCases(data: unknown): GeneratedCase[] {
   return cases;
 }
 
-/** Webhook do diagnóstico: N8N_DIAGNOSE_URL ou, sem ele, o mesmo n8n do N8N_WEBHOOK_URL. */
-export function diagnoseUrl(): string | undefined {
-  if (process.env.N8N_DIAGNOSE_URL) return process.env.N8N_DIAGNOSE_URL;
+/** Outro workflow no mesmo n8n do N8N_WEBHOOK_URL (ou no endereço do env próprio, se definido). */
+function workflowUrl(override: string | undefined, path: string): string | undefined {
+  if (override) return override;
   const base = process.env.N8N_WEBHOOK_URL;
-  return base ? base.replace(/\/webhook\/[^/?#]+/, "/webhook/qahub-diagnosticar-falhas") : undefined;
+  return base ? base.replace(/\/webhook\/[^/?#]+/, `/webhook/${path}`) : undefined;
 }
+
+/** Webhook do diagnóstico: N8N_DIAGNOSE_URL ou, sem ele, o mesmo n8n do N8N_WEBHOOK_URL. */
+export const diagnoseUrl = () => workflowUrl(process.env.N8N_DIAGNOSE_URL, "qahub-diagnosticar-falhas");
 
 /** Chama um workflow do n8n (segredo no cabeçalho) e devolve o JSON da resposta, com mensagens claras. */
 async function callN8n(url: string | undefined, workflow: string, payload: unknown): Promise<unknown> {
@@ -128,4 +131,33 @@ export function parseDiagnosis(data: unknown, executionIds: number[]): Diagnosis
 
 export async function diagnoseViaN8n(payload: unknown, executionIds: number[]): Promise<Diagnosis> {
   return parseDiagnosis(await callN8n(diagnoseUrl(), "QA Hub · Diagnosticar falhas", payload), executionIds);
+}
+
+// ---- Teste Playwright a partir do caso (n8n/qahub-gerar-playwright.workflow.json) ----
+
+export interface PlaywrightPayload {
+  case: { id: number; title: string; steps: string; requirement: string | null };
+  plan: { id: number; name: string; hints: string };
+  language: "pt-BR";
+}
+
+export interface GeneratedSpec {
+  filename: string;
+  code: string;
+}
+
+export function parseSpec(data: unknown, caseId: number): GeneratedSpec {
+  const d = (Array.isArray(data) ? data[0] : data) as { filename?: unknown; code?: unknown };
+  let code = String(d?.code ?? "").trim();
+  if (!code.includes("test(")) throw new ApiError("A IA não devolveu um teste Playwright aproveitável. Tente de novo.", 502);
+  // O título precisa do TC-id para o resultado cair no caso certo.
+  if (!code.includes(`[TC-${caseId}]`)) code = code.replace(/test\((["'`])/, `test($1[TC-${caseId}] `);
+  const slug = String(d?.filename ?? "").replace(/[^a-z0-9.-]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase();
+  const filename = /\.spec\.ts$/.test(slug) ? slug : `tc-${caseId}.spec.ts`;
+  return { filename: filename.startsWith(`tc-${caseId}`) ? filename : `tc-${caseId}-${filename}`, code: code.slice(0, 20_000) };
+}
+
+export async function generatePlaywrightViaN8n(payload: PlaywrightPayload): Promise<GeneratedSpec> {
+  const url = workflowUrl(process.env.N8N_PLAYWRIGHT_URL, "qahub-gerar-playwright");
+  return parseSpec(await callN8n(url, "QA Hub · Gerar teste Playwright", payload), payload.case.id);
 }
