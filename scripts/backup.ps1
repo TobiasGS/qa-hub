@@ -22,5 +22,14 @@ if ($LASTEXITCODE -ne 0) { throw "mariadb-dump falhou" }
 docker compose cp db:/tmp/kiwi-backup.sql $file
 docker compose exec -T db rm -f /tmp/kiwi-backup.sql
 
+# Cadastro de automação dos projetos (senhas criptografadas), se existir.
+$auto = Join-Path $dir ("automacao-{0:yyyy-MM-dd_HHmm}.json" -f (Get-Date))
+# O docker escreve o progresso no stderr: com ErrorActionPreference=Stop isso viraria erro.
+$ErrorActionPreference = "Continue"
+docker compose cp qa-hub:/app/.data/projetos.json $auto 2>&1 | Out-Null
+$ErrorActionPreference = "Stop"
+if (-not (Test-Path $auto)) { Remove-Item $auto -ErrorAction SilentlyContinue }
+Get-ChildItem $dir -Filter "automacao-*.json" | Sort-Object LastWriteTime -Descending | Select-Object -Skip 14 | Remove-Item -Force
+
 Get-ChildItem $dir -Filter "kiwi-*.sql" | Sort-Object LastWriteTime -Descending | Select-Object -Skip 14 | Remove-Item -Force
 "Backup salvo em $file ({0:N1} MB)" -f ((Get-Item $file).Length / 1MB)

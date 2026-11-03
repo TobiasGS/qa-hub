@@ -381,6 +381,13 @@ Testes sem `[TC-n]`, ou de casos fora do plano, voltam como `ignored` no log do 
 
 **Configurar no QA Hub:** `AUTOMATION_TOKEN`, `KIWI_CI_USER` e `KIWI_CI_PASSWORD` no `web/.env.production.local`. O usuário técnico fica no grupo **Tester** do Kiwi. Se o QA Hub estiver atrás do Cloudflare Access, crie um **Service Token** e uma aplicação com política **Service Auth** só para `qa.seu-dominio.com/api/automation`; o pipeline manda `CF-Access-Client-Id/Secret`.
 
+**Sistemas testados (Projetos → Configurar automação):** cada Projeto do QA Hub guarda o sistema que a automação abre:
+- **Sistema:** a URL do ambiente de teste e a pasta dos testes (`tests/<pasta>/`);
+- **Login:** caminho da tela, os rótulos dos campos de usuário e de senha, o texto do botão e o endereço depois de entrar;
+- **Usuário de teste:** usuário e senha.
+
+A senha fica **criptografada** (AES-256-GCM, com chave de `AUTOMATION_SECRET` ou, sem ele, do `SESSION_SECRET`) em `/app/.data/projetos.json`, no volume `qahub_data`, e nunca volta para a tela. O backup (`scripts/backup.ps1`) copia esse arquivo junto com o banco. O projeto de testes busca tudo em `GET /api/automation/config?plan=<id>` (com o token), então rodar um plano é só informar o número dele.
+
 **Automação ao vivo e evidências:**
 - **Início:** antes dos testes, o setup global do projeto de testes chama `POST /api/automation/start`, e o run já existe enquanto os testes rodam.
 - **Ao vivo:** uma fixture manda, a cada segundo, um print JPEG do navegador e o passo atual (`passo("Quando …")`) para `POST /api/automation/live`. Na tela do run aparece o cartão **Automação ao vivo**, com a imagem, o caso e o passo; o caso em execução fica "Em execução" na tabela. Só o último quadro é guardado, em memória.

@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, GitBranch, LayoutDashboard, ListChecks, LogOut, PlayCircle, ShieldCheck, UserCheck } from "lucide-react";
+import { FlaskConical, FolderKanban, GitBranch, LayoutDashboard, ListChecks, LogOut, PlayCircle, ShieldCheck, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "./ui";
@@ -8,6 +8,7 @@ import { cn } from "./ui";
 const LINKS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/my", label: "Meus testes", icon: UserCheck },
+  { href: "/projects", label: "Projetos", icon: FolderKanban },
   { href: "/plans", label: "Planos", icon: ListChecks },
   { href: "/runs", label: "Runs", icon: PlayCircle },
   { href: "/traceability", label: "Rastreabilidade", icon: GitBranch },

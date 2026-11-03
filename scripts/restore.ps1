@@ -16,4 +16,7 @@ docker compose cp $File db:/tmp/kiwi-restore.sql
 docker compose exec -T -e MYSQL_PWD=$password db sh -c "mariadb -uroot kiwi < /tmp/kiwi-restore.sql && rm -f /tmp/kiwi-restore.sql"
 if ($LASTEXITCODE -ne 0) { throw "Falha ao restaurar" }
 docker compose start web qa-hub
+# Cadastro de automação do mesmo horário (automacao-<data>.json), se houver.
+$auto = $File -replace 'kiwi-(.+)\.sql$', 'automacao-$1.json'
+if ($auto -ne $File -and (Test-Path $auto)) { $ErrorActionPreference = "Continue"; docker compose cp $auto qa-hub:/app/.data/projetos.json 2>&1 | Out-Null; "Cadastro de automação restaurado de $auto" }
 "Restaurado a partir de $File"

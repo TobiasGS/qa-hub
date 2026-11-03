@@ -13,6 +13,8 @@ interface JobView {
   status: "running" | "done" | "error";
   elapsed: number;
   spec?: { filename: string; code: string };
+  /** Pasta do sistema (Projetos → Configurar automação), se configurada. */
+  folder?: string | null;
   error?: string;
 }
 
@@ -91,7 +93,7 @@ export function PlaywrightDialog({ planId, testCase, onClose }: { planId: number
       {spec && (
         <div className="space-y-3">
           <p className="text-sm text-fg-2">
-            Salve como <b className="font-mono">tests/{spec.filename}</b> no repositório de testes. Revise os pontos marcados com <span className="font-mono">TODO</span>: os seletores são
+            Salve como <b className="font-mono">tests/{view?.folder ? `${view.folder}/` : ""}{spec.filename}</b> no repositório de testes. Revise os pontos marcados com <span className="font-mono">TODO</span>: os seletores são
             palpites até alguém conferir na tela (<span className="font-mono">npx playwright codegen</span>). O título já leva <b>[TC-{testCase.id}]</b>, então o resultado do pipeline cai neste caso.
           </p>
           <pre className="max-h-[50vh] overflow-auto rounded-lg border border-border bg-surface-2 p-4 font-mono text-xs leading-relaxed">{spec.code}</pre>

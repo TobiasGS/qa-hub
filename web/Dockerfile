@@ -24,7 +24,7 @@ COPY --from=build --chown=qahub:qahub /app/.next/standalone ./
 COPY --from=build --chown=qahub:qahub /app/.next/static ./.next/static
 COPY --from=build --chown=qahub:qahub /app/public ./public
 # Evidências (EVIDENCE_STORAGE=local) ficam num volume montado aqui.
-RUN mkdir -p /app/.evidence && chown qahub:qahub /app/.evidence
+RUN mkdir -p /app/.evidence /app/.data && chown qahub:qahub /app/.evidence /app/.data
 USER qahub
 EXPOSE 3000
 CMD ["node", "server.js"]
