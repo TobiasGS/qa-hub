@@ -1,6 +1,7 @@
 import { ApiError, apiRoute, toId } from "@/lib/api";
 import { requireExecutionVisible } from "@/lib/visibility";
-import { EVIDENCE_PATH, EVIDENCE_PREFIX, evidencePath, formatBytes, isEvidence, typeOf } from "@/lib/evidence/shared";
+import { saveEvidence } from "@/lib/evidence/save";
+import { EVIDENCE_PATH, evidencePath, isEvidence } from "@/lib/evidence/shared";
 import { isValidKey, storage } from "@/lib/evidence/storage";
 
 /**
@@ -12,21 +13,8 @@ export const PUT = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id }
   const executionId = toId(id);
   await requireExecutionVisible(kiwi, viewer, executionId);
   const name = new URL(req.url).searchParams.get("name")?.trim() ?? "";
-  const type = typeOf(name);
-  if (!type) throw new ApiError("Tipo de arquivo não aceito. Use imagem (png, jpg, gif, webp), vídeo (mp4, webm, mov), pdf, txt, log ou har.");
-  const size = Number(req.headers.get("content-length"));
-  if (!size || !req.body) throw new ApiError("Arquivo vazio");
-  if (size > type.maxBytes) throw new ApiError(`${name} tem ${formatBytes(size)}; o limite para esse tipo é ${formatBytes(type.maxBytes)}.`, 413);
-
-  const [execution] = await kiwi.executions({ id: executionId });
-  if (!execution) throw new ApiError("Execução não encontrada", 404);
-
-  const safe = name.replace(/[^\w.-]+/g, "_").slice(-100);
-  const key = `exec-${executionId}/${crypto.randomUUID()}-${safe}`;
-  await storage().put(key, req.body, size, type.mime);
-
-  const origin = (process.env.QA_HUB_URL ?? new URL(req.url).origin).replace(/\/$/, "");
-  const link = await kiwi.addLink(executionId, { url: `${origin}${EVIDENCE_PATH}${key}`, name: `${EVIDENCE_PREFIX}${name}`, is_defect: false });
+  const origin = process.env.QA_HUB_URL ?? new URL(req.url).origin;
+  const link = await saveEvidence(kiwi, executionId, { name, body: req.body, size: Number(req.headers.get("content-length")) }, origin);
   return { link };
 });
 

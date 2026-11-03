@@ -53,25 +53,14 @@ export function parsePayload(raw: unknown): AutomationPayload {
 /** Tira as cores ANSI do terminal e corta mensagens de erro longas. */
 const cleanError = (e: string) => e.replace(/\u001b\[[0-9;]*m/g, "").trim().slice(0, 1500);
 
-export async function applyResults(kiwi: KiwiApi, p: AutomationPayload, ciUsername: string, hubOrigin: string) {
-  const [[plan], statuses, [me]] = await Promise.all([kiwi.plans({ id: p.plan }), kiwi.statuses(), kiwi.users({ username: ciUsername })]);
+/**
+ * Run que recebe a automação: o escolhido (precisa ser do plano) ou o "· automatizado"
+ * da build, criado se não existir. Reabre se já estiver concluído. Usado no início
+ * (para dar para assistir ao vivo) e no fim (resultados).
+ */
+export async function resolveRun(kiwi: KiwiApi, p: { plan: number; build: string; run?: number }, ciUsername: string) {
+  const [[plan], [me]] = await Promise.all([kiwi.plans({ id: p.plan }), kiwi.users({ username: ciUsername })]);
   if (!plan) throw new ApiError(`Plano ${p.plan} não encontrado no QA Hub`, 404);
-  const planCases = new Set((await kiwi.cases({ plan: plan.id })).map((c) => c.id));
-
-  // Separa o que tem TC-id do plano; o resto volta em `ignored` para o log do pipeline.
-  const ignored: { title: string; reason: string }[] = [];
-  const byCase = new Map<number, AutomationResult>();
-  for (const r of p.results) {
-    const id = Number(r.title.match(TC)?.[1]);
-    // Pulado no Playwright (test.skip/test.fixme): não entra no run, senão ele nunca seria concluído.
-    if (r.status === "skipped") ignored.push({ title: r.title, reason: "pulado no Playwright (skip/fixme)" });
-    else if (!id) ignored.push({ title: r.title, reason: "sem [TC-id] no título" });
-    else if (!planCases.has(id)) ignored.push({ title: r.title, reason: `TC-${id} não está no plano ${plan.id}` });
-    // Mais de um teste para o mesmo caso: vale o pior resultado.
-    else if (!byCase.has(id) || r.status !== "passed") byCase.set(id, r);
-  }
-  if (!byCase.size) return { run: null, url: null, applied: 0, ignored };
-
   let run: TestRun | undefined;
   if (p.run) {
     // Run escolhido por quem disparou a automação (ex.: criado na tela do plano).
@@ -94,7 +83,43 @@ export async function applyResults(kiwi: KiwiApi, p: AutomationPayload, ciUserna
     // (a tarefa no Azure e o diagnóstico acompanham a nova rodada).
     await kiwi.updateRun(run.id, { stop_date: null });
     await markRunStarted(kiwi, plan.id);
+    run.stop_date = null;
   }
+  return { plan, run };
+}
+
+/** Caso do run pelo TC-id (adicionado ao run se ainda não estiver); null se o caso não é do plano. */
+export async function executionFor(kiwi: KiwiApi, runId: number, caseId: number) {
+  const [[run], existing] = await Promise.all([kiwi.runs({ id: runId }), kiwi.executions({ run: runId })]);
+  if (!run) throw new ApiError(`Run ${runId} não encontrado`, 404);
+  const found = existing.find((e) => e.case === caseId);
+  if (found) return found;
+  const inPlan = (await kiwi.cases({ plan: run.plan })).some((c) => c.id === caseId);
+  return inPlan ? kiwi.addCaseToRun(runId, caseId) : null;
+}
+
+export const caseIdOf = (title: string) => Number(title.match(TC)?.[1]) || null;
+
+export async function applyResults(kiwi: KiwiApi, p: AutomationPayload, ciUsername: string, hubOrigin: string) {
+  const [[plan], statuses] = await Promise.all([kiwi.plans({ id: p.plan }), kiwi.statuses()]);
+  if (!plan) throw new ApiError(`Plano ${p.plan} não encontrado no QA Hub`, 404);
+  const planCases = new Set((await kiwi.cases({ plan: plan.id })).map((c) => c.id));
+
+  // Separa o que tem TC-id do plano; o resto volta em `ignored` para o log do pipeline.
+  const ignored: { title: string; reason: string }[] = [];
+  const byCase = new Map<number, AutomationResult>();
+  for (const r of p.results) {
+    const id = caseIdOf(r.title);
+    // Pulado no Playwright (test.skip/test.fixme): não entra no run, senão ele nunca seria concluído.
+    if (r.status === "skipped") ignored.push({ title: r.title, reason: "pulado no Playwright (skip/fixme)" });
+    else if (!id) ignored.push({ title: r.title, reason: "sem [TC-id] no título" });
+    else if (!planCases.has(id)) ignored.push({ title: r.title, reason: `TC-${id} não está no plano ${plan.id}` });
+    // Mais de um teste para o mesmo caso: vale o pior resultado.
+    else if (!byCase.has(id) || r.status !== "passed") byCase.set(id, r);
+  }
+  if (!byCase.size) return { run: null, url: null, applied: 0, ignored };
+
+  const { run } = await resolveRun(kiwi, p, ciUsername);
 
   const status = (name: string) => statuses.find((s) => s.name === name)?.id;
   const existing = await kiwi.executions({ run: run.id });

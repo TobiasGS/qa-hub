@@ -381,6 +381,11 @@ Testes sem `[TC-n]`, ou de casos fora do plano, voltam como `ignored` no log do 
 
 **Configurar no QA Hub:** `AUTOMATION_TOKEN`, `KIWI_CI_USER` e `KIWI_CI_PASSWORD` no `web/.env.production.local`. O usuário técnico fica no grupo **Tester** do Kiwi. Se o QA Hub estiver atrás do Cloudflare Access, crie um **Service Token** e uma aplicação com política **Service Auth** só para `qa.seu-dominio.com/api/automation`; o pipeline manda `CF-Access-Client-Id/Secret`.
 
+**Automação ao vivo e evidências:**
+- **Início:** antes dos testes, o setup global do projeto de testes chama `POST /api/automation/start`, e o run já existe enquanto os testes rodam.
+- **Ao vivo:** uma fixture manda, a cada segundo, um print JPEG do navegador e o passo atual (`passo("Quando …")`) para `POST /api/automation/live`. Na tela do run aparece o cartão **Automação ao vivo**, com a imagem, o caso e o passo; o caso em execução fica "Em execução" na tabela. Só o último quadro é guardado, em memória.
+- **Fim:** nas falhas, o print e o vídeo do Playwright são anexados como evidência da execução (`PUT /api/automation/evidence`).
+
 **Gerar o teste a partir do caso:** no menu ⋯ de um caso, **Gerar teste Playwright**. A IA (workflow `n8n/qahub-gerar-playwright.workflow.json`, que precisa ser importado e publicado) escreve o `*.spec.ts` a partir do Dado/Quando/Então, já com o `[TC-id]` no título, usando `getByRole`/`getByLabel` e marcando com `TODO` o que é palpite. Dicas de telas e seletores podem ir numa seção `## Automação` na descrição do plano. No diálogo dá para copiar, baixar e marcar o caso como automatizado.
 
 ## 5b. Cypress no Azure Pipelines (plugin JUnit do Kiwi)

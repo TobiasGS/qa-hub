@@ -1,6 +1,7 @@
 import { Bug, Play } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { LiveAutomation } from "@/components/live-automation";
 import { LiveRefresh } from "@/components/live-refresh";
 import { RetestButton } from "@/components/retest-button";
 import { RunDiagnosis } from "@/components/run-diagnosis";
@@ -63,6 +64,8 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         <ProgressBar summary={s} className="h-3" />
       </Card>
 
+      <LiveAutomation runId={run.id} caseIndex={Object.fromEntries(sorted.map((e, i) => [e.case, i]))} />
+
       {failedCount > 0 && (
         <RunDiagnosis
           runId={run.id}
@@ -102,7 +105,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <StatusBadge outcome={outcomeOf(e.status, statuses)} />
+                          <StatusBadge outcome={outcomeOf(e.status, statuses)} label={e.status__name === "RUNNING" ? "Em execução" : e.status__name === "PAUSED" ? "Pausado" : undefined} />
                           {signalOf.has(e.id) && <SignalBadges tags={signalOf.get(e.id)!.tags} lastPassBuild={signalOf.get(e.id)!.lastPassBuild} />}
                         </div>
                       </td>
