@@ -59,7 +59,9 @@ export async function applyResults(kiwi: KiwiApi, p: AutomationPayload, ciUserna
   const byCase = new Map<number, AutomationResult>();
   for (const r of p.results) {
     const id = Number(r.title.match(TC)?.[1]);
-    if (!id) ignored.push({ title: r.title, reason: "sem [TC-id] no título" });
+    // Pulado no Playwright (test.skip/test.fixme): não entra no run, senão ele nunca seria concluído.
+    if (r.status === "skipped") ignored.push({ title: r.title, reason: "pulado no Playwright (skip/fixme)" });
+    else if (!id) ignored.push({ title: r.title, reason: "sem [TC-id] no título" });
     else if (!planCases.has(id)) ignored.push({ title: r.title, reason: `TC-${id} não está no plano ${plan.id}` });
     // Mais de um teste para o mesmo caso: vale o pior resultado.
     else if (!byCase.has(id) || r.status !== "passed") byCase.set(id, r);
@@ -86,13 +88,10 @@ export async function applyResults(kiwi: KiwiApi, p: AutomationPayload, ciUserna
   const now = Date.now();
   for (const [caseId, r] of byCase) {
     const execution = existing.find((e) => e.case === caseId) ?? (await kiwi.addCaseToRun(run.id, caseId));
-    const target = r.status === "passed" ? status("PASSED") : r.status === "skipped" ? status("IDLE") : status("FAILED");
+    const target = r.status === "passed" ? status("PASSED") : status("FAILED");
     if (target === undefined) continue;
-    await kiwi.updateExecution(execution.id, {
-      status: target,
-      ...(r.status !== "skipped" ? { start_date: kiwiDate(new Date(now - (r.durationMs ?? 0))), stop_date: kiwiDate(new Date(now)) } : {}),
-    });
-    if (r.status !== "passed" && r.status !== "skipped") {
+    await kiwi.updateExecution(execution.id, { status: target, start_date: kiwiDate(new Date(now - (r.durationMs ?? 0))), stop_date: kiwiDate(new Date(now)) });
+    if (r.status !== "passed") {
       const lines = [`🤖 Teste automatizado ${r.status === "timedOut" ? "estourou o tempo" : "falhou"}: ${r.title}`];
       if (r.error) lines.push("", cleanError(r.error));
       if (p.pipelineUrl) lines.push("", `Pipeline: ${p.pipelineUrl}`);

@@ -1,4 +1,5 @@
 import "server-only";
+import { Agent, fetch as undiciFetch } from "undici";
 import { ApiError } from "./api";
 
 // Geração de casos de teste pela história, num workflow do n8n (n8n/qahub-gerar-casos.workflow.json).
@@ -52,24 +53,29 @@ function workflowUrl(override: string | undefined, path: string): string | undef
 export const diagnoseUrl = () => workflowUrl(process.env.N8N_DIAGNOSE_URL, "qahub-diagnosticar-falhas");
 
 /** Chama um workflow do n8n (segredo no cabeçalho) e devolve o JSON da resposta, com mensagens claras. */
+// O fetch do Node desiste de esperar a resposta aos 300 s (headersTimeout do undici),
+// antes do nosso limite: com a IA sobrecarregada o n8n pode levar mais que isso.
+let n8nAgent: Agent | undefined;
+const agent = () => (n8nAgent ??= new Agent({ headersTimeout: TIMEOUT_MS, bodyTimeout: TIMEOUT_MS }));
+
 async function callN8n(url: string | undefined, workflow: string, payload: unknown): Promise<unknown> {
   const secret = process.env.N8N_WEBHOOK_SECRET;
   if (!url || !secret) throw new ApiError("IA não configurada: defina N8N_WEBHOOK_URL e N8N_WEBHOOK_SECRET.");
 
-  let res: Response;
+  let res: Awaited<ReturnType<typeof undiciFetch>>;
   try {
-    res = await fetch(url, {
+    res = await undiciFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-QAHub-Secret": secret },
       body: JSON.stringify(payload),
-      cache: "no-store",
+      dispatcher: agent(),
       // Roda em segundo plano (lib/jobs.ts): com a IA sobrecarregada, as
       // novas tentativas do workflow podem passar de 5 minutos.
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {
     const err = e as Error;
-    if (err.name === "TimeoutError") throw new ApiError(`O n8n não respondeu em ${TIMEOUT_MS / 60_000} minutos. A IA pode estar sobrecarregada: tente de novo mais tarde.`, 504);
+    if (err.name === "TimeoutError" || /UND_ERR_(HEADERS|BODY)_TIMEOUT/.test(String((err as { cause?: { code?: string } }).cause?.code))) throw new ApiError(`O n8n não respondeu em ${TIMEOUT_MS / 60_000} minutos. A IA pode estar sobrecarregada: tente de novo mais tarde.`, 504);
     throw new ApiError("Não consegui falar com o n8n. Ele está ligado? Rode o \"Iniciar QA Hub.cmd\" ou abra o n8n.", 502);
   }
   if (res.status === 401 || res.status === 403) throw new ApiError("O n8n recusou o acesso: o segredo do webhook não confere (N8N_WEBHOOK_SECRET × credencial Header Auth).", 502);
