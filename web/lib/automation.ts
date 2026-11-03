@@ -19,6 +19,8 @@ export interface AutomationResult {
 export interface AutomationPayload {
   plan: number;
   build: string;
+  /** Run já criado no QA Hub para receber o resultado (opcional; senão, o run "· automatizado" da build). */
+  run?: number;
   pipelineUrl?: string;
   results: AutomationResult[];
 }
@@ -43,7 +45,9 @@ export function parsePayload(raw: unknown): AutomationPayload {
     error: r?.error ? String(r.error).slice(0, 4000) : undefined,
   }));
   const pipelineUrl = typeof b?.pipelineUrl === "string" && /^https?:\/\//.test(b.pipelineUrl) ? b.pipelineUrl.slice(0, 1000) : undefined;
-  return { plan, build, pipelineUrl, results };
+  const run = b?.run === undefined || b.run === null || (b.run as unknown) === "" ? undefined : Number(b.run);
+  if (run !== undefined && (!Number.isInteger(run) || run <= 0)) throw new ApiError("Campo inválido: run (id do run no QA Hub)");
+  return { plan, build, run, pipelineUrl, results };
 }
 
 /** Tira as cores ANSI do terminal e corta mensagens de erro longas. */
@@ -68,16 +72,25 @@ export async function applyResults(kiwi: KiwiApi, p: AutomationPayload, ciUserna
   }
   if (!byCase.size) return { run: null, url: null, applied: 0, ignored };
 
-  // Build (do projeto) e run automatizado desta build: reaproveitado se o pipeline rodar de novo.
-  const builds = await kiwi.builds({ version: plan.product_version });
-  const build = builds.find((b) => b.name.toLowerCase() === p.build.toLowerCase()) ?? (await kiwi.createBuild({ name: p.build, version: plan.product_version }));
-  const summary = `${plan.name} — build ${build.name}${AUTO_SUFFIX}`.slice(0, 255);
-  let run: TestRun | undefined = (await kiwi.runs({ plan: plan.id, build: build.id })).find((r) => r.summary.endsWith(AUTO_SUFFIX));
-  if (!run) {
-    run = await kiwi.createRun({ plan: plan.id, build: build.id, summary, manager: me?.id ?? 0, default_tester: me?.id ?? null });
-    await markRunStarted(kiwi, plan.id); // tarefa do plano no Azure → "Em Teste"
-  } else if (run.stop_date) {
-    // Pipeline rodou de novo nesta build: reabre, para concluir com o resultado novo
+  let run: TestRun | undefined;
+  if (p.run) {
+    // Run escolhido por quem disparou a automação (ex.: criado na tela do plano).
+    [run] = await kiwi.runs({ id: p.run });
+    if (!run || run.plan !== plan.id) throw new ApiError(`Run ${p.run} não encontrado no plano ${plan.id}`, 404);
+  } else {
+    // Build (do projeto) e run automatizado desta build: reaproveitado se o pipeline rodar de novo.
+    const builds = await kiwi.builds({ version: plan.product_version });
+    const build = builds.find((b) => b.name.toLowerCase() === p.build.toLowerCase()) ?? (await kiwi.createBuild({ name: p.build, version: plan.product_version }));
+    const summary = `${plan.name} — build ${build.name}${AUTO_SUFFIX}`.slice(0, 255);
+    run = (await kiwi.runs({ plan: plan.id, build: build.id })).find((r) => r.summary.endsWith(AUTO_SUFFIX));
+    if (!run) {
+      run = await kiwi.createRun({ plan: plan.id, build: build.id, summary, manager: me?.id ?? 0, default_tester: me?.id ?? null });
+      await markRunStarted(kiwi, plan.id); // tarefa do plano no Azure → "Em Teste"
+      run.stop_date = null;
+    }
+  }
+  if (run.stop_date) {
+    // Run já concluído (pipeline de novo na mesma build, ou run escolhido): reabre, para concluir com o resultado novo
     // (a tarefa no Azure e o diagnóstico acompanham a nova rodada).
     await kiwi.updateRun(run.id, { stop_date: null });
     await markRunStarted(kiwi, plan.id);
