@@ -35,10 +35,32 @@ const slug = (name: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
 
-/** "Configurar automação" de um projeto: sistema a testar, como é o login e o usuário de teste. */
+/** "Configurar automação" de um projeto: o botão que abre o formulário. */
 export function ProjectAutomationButton({ projectId, projectName, current }: { projectId: number; projectName: string; current: AutomationView | null }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>
+        {current ? <Settings className="size-4" /> : <Bot className="size-4" />} {current ? "Editar automação" : "Configurar automação"}
+      </Button>
+      {open && <ProjectAutomationDialog projectId={projectId} projectName={projectName} current={current} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** Formulário de automação: sistema a testar, como é o login e o usuário de teste. */
+export function ProjectAutomationDialog({
+  projectId,
+  projectName,
+  current,
+  onClose,
+}: {
+  projectId: number;
+  projectName: string;
+  current: AutomationView | null;
+  onClose: () => void;
+}) {
+  const router = useRouter();
   const [form, setForm] = useState(() => ({
     baseUrl: current?.baseUrl ?? "",
     folder: current?.folder ?? slug(projectName),
@@ -57,8 +79,7 @@ export function ProjectAutomationButton({ projectId, projectName, current }: { p
     setError(null);
     try {
       await send(`/api/projects/${projectId}/automation`, "PUT", form);
-      setOpen(false);
-      setForm((f) => ({ ...f, password: "" }));
+      onClose();
       router.refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -69,10 +90,7 @@ export function ProjectAutomationButton({ projectId, projectName, current }: { p
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}>
-        {current ? <Settings className="size-4" /> : <Bot className="size-4" />} {current ? "Editar automação" : "Configurar automação"}
-      </Button>
-      <Dialog open={open} onClose={() => !busy && setOpen(false)} title={`Automação · ${projectName}`} description="Sistema que os testes automatizados abrem e o usuário que eles usam." wide>
+      <Dialog open onClose={() => !busy && onClose()} title={`Automação · ${projectName}`} description="Sistema que os testes automatizados abrem e o usuário que eles usam." wide>
         <form onSubmit={onSubmit} className="space-y-5">
           <fieldset className="grid gap-3 sm:grid-cols-[2fr_1fr]">
             <Field label="URL do sistema (ambiente de teste)" hint="Ex.: https://sistema.homologacao.empresa.com.br">
@@ -125,7 +143,7 @@ export function ProjectAutomationButton({ projectId, projectName, current }: { p
               Última alteração por {current.updatedBy} em {new Date(current.updatedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}.
             </p>
           )}
-          <FormFooter busy={busy} error={error} submitLabel="Salvar" onCancel={() => setOpen(false)} />
+          <FormFooter busy={busy} error={error} submitLabel="Salvar" onCancel={onClose} />
         </form>
       </Dialog>
     </>

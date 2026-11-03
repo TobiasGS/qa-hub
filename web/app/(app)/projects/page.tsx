@@ -1,5 +1,6 @@
 import { Bot, FolderKanban } from "lucide-react";
 import Link from "next/link";
+import { NewProjectButton } from "@/components/new-project-button";
 import { ProjectAutomationButton } from "@/components/project-automation-form";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { listAutomations, toView } from "@/lib/automation-config";
@@ -17,10 +18,11 @@ export default async function ProjectsPage() {
       <PageHeader
         title="Projetos"
         description="Cada projeto é um sistema testado. Configure a automação (URL, login e usuário de teste) para os testes Playwright rodarem nele."
+        action={<NewProjectButton />}
       />
       {projects.length === 0 ? (
         <Card>
-          <EmptyState>Nenhum projeto ainda. Crie um pelo “Novo plano” (+ Projeto).</EmptyState>
+          <EmptyState>Nenhum projeto ainda. Crie o primeiro em Novo projeto.</EmptyState>
         </Card>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
