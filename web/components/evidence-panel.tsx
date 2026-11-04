@@ -116,7 +116,7 @@ export function EvidencePanel({
                   )}
                 </div>
                 {u.error ? (
-                  <p className="text-failed">{u.error}</p>
+                  <p className="text-failed-text">{u.error}</p>
                 ) : (
                   <div className="mt-1 h-1 rounded-full bg-surface-2">
                     <div className="h-1 rounded-full bg-accent transition-all" style={{ width: `${u.progress * 100}%` }} />
@@ -155,7 +155,7 @@ export function EvidencePanel({
                 Abrir em nova aba <ExternalLink className="size-3.5" />
               </a>
               <Button
-                className="text-failed"
+                className="text-failed-text"
                 onClick={() => {
                   setRemoving(viewing);
                   setViewing(null);

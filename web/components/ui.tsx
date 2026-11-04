@@ -14,7 +14,7 @@ export function CardHeader({ title, description, action }: { title: string; desc
   return (
     <div className="flex items-start justify-between gap-3 px-5 pt-4">
       <div>
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="text-base font-semibold">{title}</h2>
         {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
       </div>
       {action}
@@ -26,7 +26,7 @@ export function PageHeader({ title, description, action }: { title: string; desc
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {description && <p className="mt-1 text-sm text-fg-2">{description}</p>}
       </div>
       {action}
@@ -35,10 +35,13 @@ export function PageHeader({ title, description, action }: { title: string; desc
 }
 
 const buttonStyles = {
-  primary: "bg-accent text-accent-fg hover:opacity-90",
-  secondary: "border border-border bg-surface hover:bg-surface-2",
+  primary: "bg-accent-solid text-accent-fg hover:opacity-90",
+  secondary: "border border-border-strong bg-surface hover:bg-surface-2",
   ghost: "hover:bg-surface-2",
 };
+
+/** 36px no desktop; no celular, no mínimo 44px (alvo de toque). Um h-* passado em className continua valendo. */
+const controlHeight = "h-9 max-sm:min-h-11";
 
 type ButtonVariant = keyof typeof buttonStyles;
 
@@ -46,7 +49,8 @@ export function Button({ variant = "secondary", className, ...props }: React.But
   return (
     <button
       className={cn(
-        "inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50",
+        controlHeight,
+        "inline-flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50",
         buttonStyles[variant],
         className,
       )}
@@ -58,18 +62,24 @@ export function Button({ variant = "secondary", className, ...props }: React.But
 export function ButtonLink({ variant = "secondary", className, ...props }: React.ComponentProps<typeof Link> & { variant?: ButtonVariant }) {
   return (
     <Link
-      className={cn("inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition", buttonStyles[variant], className)}
+      className={cn(controlHeight, "inline-flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition", buttonStyles[variant], className)}
       {...props}
     />
   );
 }
 
-export function Badge({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
-  return <span className={cn("inline-flex items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-fg-2", className)} {...props} />;
+const badgeStyles = {
+  neutral: "bg-surface-2 text-fg-2",
+  warn: "bg-warn-tint text-warn",
+  danger: "bg-failed/15 text-failed-text",
+};
+
+export function Badge({ variant = "neutral", className, ...props }: React.HTMLAttributes<HTMLSpanElement> & { variant?: keyof typeof badgeStyles }) {
+  return <span className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium", badgeStyles[variant], className)} {...props} />;
 }
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
   return <p className="px-5 py-10 text-center text-sm text-muted">{children}</p>;
 }
 
-export const inputStyles = "h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-accent";
+export const inputStyles = `${controlHeight} rounded-lg border border-border-strong bg-surface px-3 text-sm focus:border-accent focus-visible:outline-offset-0`;

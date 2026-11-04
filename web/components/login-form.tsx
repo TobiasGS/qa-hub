@@ -41,7 +41,7 @@ export function LoginForm({ mock }: { mock: boolean }) {
           <input name="password" type="password" required autoComplete="current-password" className={cn(inputStyles, "mt-1 w-full")} />
         </label>
       )}
-      {error && <p className="text-sm text-failed">{error}</p>}
+      {error && <p className="text-sm text-failed-text">{error}</p>}
       <Button type="submit" variant="primary" className="w-full" disabled={busy}>
         {busy && <Loader2 className="size-4 animate-spin" />} Entrar
       </Button>

@@ -74,7 +74,7 @@ export function BugDialog({ executionId, open, onClose, onCreated }: { execution
           <Loader2 className="size-4 animate-spin" /> Verificando o card do plano…
         </p>
       )}
-      {loadError && <p className="text-sm text-failed">{loadError}</p>}
+      {loadError && <p className="text-sm text-failed-text">{loadError}</p>}
       {target && (
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm">

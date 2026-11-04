@@ -23,9 +23,9 @@ interface CaseInfo {
 }
 
 const ACTIONS: { outcome: Outcome; status: string; label: string; key: string; icon: typeof CheckCircle2; className: string }[] = [
-  { outcome: "passed", status: "PASSED", label: "Passou", key: "P", icon: CheckCircle2, className: "bg-passed text-white hover:opacity-90" },
+  { outcome: "passed", status: "PASSED", label: "Passou", key: "P", icon: CheckCircle2, className: "bg-passed-solid text-white hover:opacity-90" },
   { outcome: "failed", status: "FAILED", label: "Falhou", key: "F", icon: XCircle, className: "bg-failed text-white hover:opacity-90" },
-  { outcome: "blocked", status: "BLOCKED", label: "Bloqueado", key: "B", icon: Ban, className: "bg-blocked text-black hover:opacity-90" },
+  { outcome: "blocked", status: "BLOCKED", label: "Bloqueado", key: "B", icon: Ban, className: "bg-blocked-solid text-black hover:opacity-90" },
 ];
 
 const STATUS_LABEL: Record<string, string> = {
@@ -344,7 +344,7 @@ export function ExecuteRunner(props: {
               ))}
             </div>
 
-            {error && <p className="mt-3 text-sm text-failed">{error}</p>}
+            {error && <p className="mt-3 text-sm text-failed-text">{error}</p>}
 
             {(outcome === "failed" || outcome === "blocked" || currentBugs.length > 0) && (
               <div className="mt-4 border-t border-border pt-4">

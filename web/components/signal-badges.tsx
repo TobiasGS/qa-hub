@@ -2,7 +2,7 @@ import { SIGNAL_LABEL, type SignalTag } from "@/lib/diagnosis";
 import { Badge, cn } from "./ui";
 
 const STYLE: Record<SignalTag, string> = {
-  regression: "bg-failed/15 text-failed",
+  regression: "bg-failed/15 text-failed-text",
   recurring: "bg-blocked/20",
   flaky: "bg-accent/15 text-accent",
   new: "",

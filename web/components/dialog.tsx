@@ -93,7 +93,7 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onClose={onClose} title={title}>
       <div className="text-sm text-fg-2">{message}</div>
-      {error && <p className="mt-3 text-sm text-failed">{error}</p>}
+      {error && <p className="mt-3 text-sm text-failed-text">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
         <Button onClick={onClose} disabled={busy}>
           Cancelar

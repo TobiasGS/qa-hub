@@ -119,7 +119,7 @@ export function RunDiagnosis({
         </p>
       )}
       {(failed || error) && (
-        <p className="mt-4 rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed">
+        <p className="mt-4 rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed-text">
           {d ? "A última análise não terminou" : "Não foi possível analisar"}: {error ?? failed}
           {d && " Abaixo, a análise anterior."}
         </p>
@@ -137,7 +137,7 @@ export function RunDiagnosis({
             {d.groups.map((g, i) => (
               <li key={i} className="rounded-lg border border-border p-4">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Badge className={g.category === "produto" ? "bg-failed/15 text-failed" : g.category === "instavel" ? "bg-accent/15 text-accent" : "bg-blocked/20"}>{CATEGORY[g.category] ?? g.category}</Badge>
+                  <Badge className={g.category === "produto" ? "bg-failed/15 text-failed-text" : g.category === "instavel" ? "bg-accent/15 text-accent" : "bg-blocked/20"}>{CATEGORY[g.category] ?? g.category}</Badge>
                   <Badge>confiança {g.confidence}</Badge>
                 </div>
                 <h3 className="mt-2 text-sm font-semibold">{g.title}</h3>

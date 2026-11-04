@@ -76,7 +76,7 @@ export function CaseForm({
         className="sm:col-span-3"
         hint={
           invalid.length ? (
-            <span className="text-failed">Use azure-86, jira-123 ou cole o link do card, separados por vírgula.</span>
+            <span className="text-failed-text">Use azure-86, jira-123 ou cole o link do card, separados por vírgula.</span>
           ) : (
             <RequirementChips value={requirement} templates={templates} />
           )

@@ -140,7 +140,7 @@ export function GenerateCasesButton({ planId, cardKey, options }: { planId: numb
             </p>
           </div>
         )}
-        {error && <p className="mb-3 rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed">{error}</p>}
+        {error && <p className="mb-3 rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed-text">{error}</p>}
         {error && !loading && cases.length === 0 && (
           <Button onClick={generate}>
             <Sparkles className="size-4" /> Tentar de novo

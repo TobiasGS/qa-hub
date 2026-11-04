@@ -52,7 +52,7 @@ export function CaseHistory({ caseId, currentExecutionId, refreshKey }: { caseId
       </button>
       {open && (
         <div className="border-t border-border px-3 py-2">
-          {error && <p className="py-2 text-sm text-failed">{error}</p>}
+          {error && <p className="py-2 text-sm text-failed-text">{error}</p>}
           {!attempts && !error && (
             <p className="flex items-center gap-2 py-2 text-sm text-muted">
               <Loader2 className="size-4 animate-spin" /> Carregando…

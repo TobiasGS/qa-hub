@@ -51,7 +51,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label="Taxa de sucesso" value={formatRate(d.latest.passRate)} hint={buildHint}>
           {delta !== null && (
-            <span className={cn("text-xs font-medium tabular", delta >= 0 ? "text-passed-text" : "text-failed")}>
+            <span className={cn("text-xs font-medium tabular", delta >= 0 ? "text-passed-text" : "text-failed-text")}>
               {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} p.p. vs anterior
             </span>
           )}

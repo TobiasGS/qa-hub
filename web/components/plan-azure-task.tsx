@@ -47,7 +47,7 @@ export function PlanAzureTask({ planId, task, canCreate }: { planId: number; tas
       <button onClick={create} disabled={busy} className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-xs font-medium hover:border-accent disabled:opacity-60">
         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <ListTodo className="size-3.5" />} Criar tarefa no Azure
       </button>
-      {error && <span className="text-xs text-failed">{error}</span>}
+      {error && <span className="text-xs text-failed-text">{error}</span>}
     </span>
   );
 }

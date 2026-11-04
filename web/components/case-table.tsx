@@ -92,7 +92,7 @@ export function CaseTable({
         )}
       </div>
 
-      {error && <p className="mx-5 mt-3 rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed">{error}</p>}
+      {error && <p className="mx-5 mt-3 rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed-text">{error}</p>}
 
       {cases.length === 0 ? (
         <EmptyState>Nenhum caso ainda. Crie o primeiro para poder montar um run.</EmptyState>
@@ -222,7 +222,7 @@ function RowMenu({ items }: { items: { label: string; icon: typeof Pencil; onCli
                 setOpen(false);
                 it.onClick();
               }}
-              className={cn("flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2", it.danger && "text-failed")}
+              className={cn("flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2", it.danger && "text-failed-text")}
             >
               <it.icon className="size-4" /> {it.label}
             </button>

@@ -28,7 +28,7 @@ export function RequirementChips({ value, templates, className }: { value: strin
         );
       })}
       {invalid.map((t) => (
-        <span key={t} className="inline-flex items-center rounded-md border border-failed/40 px-1.5 py-0.5 text-xs text-failed" title="Formato não reconhecido">
+        <span key={t} className="inline-flex items-center rounded-md border border-failed/40 px-1.5 py-0.5 text-xs text-failed-text" title="Formato não reconhecido">
           {t}
         </span>
       ))}

@@ -48,7 +48,7 @@ export function FormFooter({
 }) {
   return (
     <>
-      {error && <p className="mt-4 text-sm text-failed">{error}</p>}
+      {error && <p className="mt-4 text-sm text-failed-text">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
         <Button type="button" onClick={onCancel} disabled={busy}>
           Cancelar

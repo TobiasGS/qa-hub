@@ -84,7 +84,7 @@ export function PlaywrightDialog({ planId, testCase, onClose }: { planId: number
       )}
       {error && (
         <div className="space-y-3">
-          <p className="rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed">{error}</p>
+          <p className="rounded-lg bg-failed/10 px-3 py-2 text-sm text-failed-text">{error}</p>
           <Button onClick={generate}>
             <RotateCcw className="size-4" /> Tentar de novo
           </Button>
