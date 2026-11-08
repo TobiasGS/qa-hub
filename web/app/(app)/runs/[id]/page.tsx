@@ -1,4 +1,4 @@
-import { Bug, Play } from "lucide-react";
+import { Bug, Download, FileText, Play } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LiveAutomation } from "@/components/live-automation";
@@ -7,7 +7,7 @@ import { RetestButton } from "@/components/retest-button";
 import { RunDiagnosis } from "@/components/run-diagnosis";
 import { SignalBadges } from "@/components/signal-badges";
 import { formatRate, OutcomeLegend, ProgressBar, StatusBadge } from "@/components/status";
-import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
+import { buttonClass, ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
 import { failureSignals } from "@/lib/diagnosis";
 import { latestJob } from "@/lib/jobs";
 import { outcomeOf, summarize } from "@/lib/metrics";
@@ -46,6 +46,12 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           <div className="flex flex-wrap items-center gap-2">
             {!run.stop_date && <LiveRefresh />}
             {failedCount > 0 && <RetestButton run={run} failedCount={failedCount} builds={builds} />}
+            <ButtonLink href={`/relatorio/runs/${run.id}`} target="_blank" title="Relatório para imprimir ou salvar em PDF">
+              <FileText className="size-4" /> Relatório
+            </ButtonLink>
+            <a href={`/api/runs/${run.id}/export`} download className={buttonClass("secondary")} title="Baixar CSV para o Excel">
+              <Download className="size-4" /> CSV
+            </a>
             <ButtonLink href={`/runs/${run.id}/execute`} variant="primary">
               <Play className="size-4" /> Executar
             </ButtonLink>

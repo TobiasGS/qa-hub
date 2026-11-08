@@ -1,6 +1,7 @@
 import "server-only";
 import type { KiwiApi } from "./kiwi/types";
 import { outcomeOf } from "./metrics";
+import { notify } from "./notify";
 import { COMPLETED_WORK_FIELD, setPlanTaskState, TASK_STATES } from "./plan-task";
 import { durationOf, kiwiDate } from "./timer";
 
@@ -39,6 +40,14 @@ export async function syncRunState(kiwi: KiwiApi, runId: number): Promise<"close
 
   if (!pending && !run.stop_date) {
     await kiwi.updateRun(runId, { stop_date: kiwiDate(new Date()) });
+    const count = (o: string) => outcomes.filter((x) => x === o).length;
+    const totals = { total: outcomes.length, passed: count("passed"), failed: count("failed"), blocked: count("blocked") };
+    notify({
+      type: "run_concluido",
+      run: { id: run.id, title: run.summary, plan: run.plan__name, build: run.build__name },
+      totals,
+      passRate: totals.total ? Math.round((totals.passed / totals.total) * 1000) / 10 : null,
+    });
     if (await isLatestRun(kiwi, run.plan, runId)) {
       const failed = outcomes.some((o) => o === "failed" || o === "blocked");
       await setPlanTaskState(kiwi, run.plan, failed ? TASK_STATES.failed : TASK_STATES.passed, { [COMPLETED_WORK_FIELD]: await planHours(kiwi, run.plan) });

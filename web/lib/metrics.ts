@@ -254,6 +254,7 @@ export async function traceabilityData(kiwi: KiwiApi, visible: Visible | null) {
   const withReq = rows.filter((r) => r.requirement);
   return {
     rows,
+    cases,
     stats: {
       requirements: withReq.length,
       covered: withReq.filter((r) => r.outcome === "passed").length,

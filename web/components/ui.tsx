@@ -59,13 +59,12 @@ export function Button({ variant = "secondary", className, ...props }: React.But
   );
 }
 
+/** Classes de botão para um <a> comum (ex.: download de arquivo, que não deve passar pelo Link). */
+export const buttonClass = (variant: ButtonVariant = "secondary", className?: string) =>
+  cn(controlHeight, "inline-flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition", buttonStyles[variant], className);
+
 export function ButtonLink({ variant = "secondary", className, ...props }: React.ComponentProps<typeof Link> & { variant?: ButtonVariant }) {
-  return (
-    <Link
-      className={cn(controlHeight, "inline-flex items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition", buttonStyles[variant], className)}
-      {...props}
-    />
-  );
+  return <Link className={buttonClass(variant, className)} {...props} />;
 }
 
 const badgeStyles = {

@@ -82,6 +82,49 @@ export async function getWorkItem(id: number): Promise<WorkItem> {
   };
 }
 
+export interface CardBrief {
+  id: number;
+  title: string;
+  type: string;
+  state: string;
+}
+
+interface RawWithRelations extends RawWorkItem {
+  relations?: { rel: string; url: string }[] | null;
+}
+
+const brief = (w: RawWorkItem): CardBrief => ({
+  id: w.id,
+  title: w.fields["System.Title"] ?? "",
+  type: w.fields["System.WorkItemType"] ?? "",
+  state: w.fields["System.State"] ?? "",
+});
+
+/**
+ * O card e as histórias filhas dele (sem tarefas, bugs nem itens removidos). Sem filhos,
+ * o próprio card é o que precisa de casos. Usado para achar cards ainda sem caso de teste.
+ */
+export async function getCardWithChildren(id: number): Promise<{ card: CardBrief; children: CardBrief[] }> {
+  const cfg = azureConfig();
+  const w = await call<RawWithRelations>(`wit/workitems/${id}?$expand=relations`);
+  const childIds = (w.relations ?? [])
+    .filter((r) => r.rel === "System.LinkTypes.Hierarchy-Forward")
+    .map((r) => Number(r.url.match(/\/workitems\/(\d+)$/i)?.[1]))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const skip = new Set([cfg?.taskType, cfg?.bugType, "Task", "Bug", "Tarefa"].filter(Boolean).map((t) => t!.toLowerCase()));
+  const children: CardBrief[] = [];
+  // A API aceita até 200 ids por chamada.
+  for (let i = 0; i < childIds.length; i += 200) {
+    const ids = childIds.slice(i, i + 200).join(",");
+    const r = await call<{ value: RawWorkItem[] }>(`wit/workitems?ids=${ids}&fields=System.Title,System.WorkItemType,System.State`);
+    children.push(...r.value.map(brief));
+  }
+  return {
+    card: brief(w),
+    children: children.filter((c) => !skip.has(c.type.toLowerCase()) && c.state !== "Removed"),
+  };
+}
+
 /** HTML do Azure (descrição, critérios de aceite) → texto simples, preservando quebras de linha e listas. */
 export function htmlToText(html: string | undefined): string {
   if (!html) return "";

@@ -44,7 +44,7 @@ export function parseGeneratedCases(data: unknown): GeneratedCase[] {
 }
 
 /** Outro workflow no mesmo n8n do N8N_WEBHOOK_URL (ou no endereço do env próprio, se definido). */
-function workflowUrl(override: string | undefined, path: string): string | undefined {
+export function workflowUrl(override: string | undefined, path: string): string | undefined {
   if (override) return override;
   const base = process.env.N8N_WEBHOOK_URL;
   return base ? base.replace(/\/webhook\/[^/?#]+/, `/webhook/${path}`) : undefined;

@@ -26,7 +26,9 @@ navegador ──► QA Hub (Next.js, qa.seu-dominio.com)
   - **cronômetro** que começa ao abrir o caso, com pausa e **histórico** de tempo e re-testes;
   - **evidências**: prints, imagens, vídeos de até 100 MB, PDF, logs e HAR, com arrastar e soltar, miniaturas e player;
   - botão **Abrir bug**: com card do Azure no plano, o bug nasce no Azure DevOps como **filho do card**, na mesma sprint.
-- **Matriz de rastreabilidade:** card (história do Jira/Azure) → casos → último resultado → bugs.
+- **Matriz de rastreabilidade:** card (história do Jira/Azure) → casos → último resultado → bugs, com a lista de **cards sem caso** (histórias filhas do card de cada plano que ainda não têm caso de teste).
+- **Relatório do run:** página pronta para imprimir ou salvar em **PDF** e download em **CSV** para o Excel.
+- **Avisos no Teams:** run concluído e diagnóstico da IA pronto viram um cartão no canal, via n8n.
 - **Diagnóstico de falhas:** cada falha do run ganha selos (Regressão, Recorrente, Instável, Nova, Sem bug) e, quando o run termina com falhas, a IA agrupa as falhas por causa provável e sugere o que fazer. O run em andamento atualiza sozinho ("ao vivo").
 
 **Por que um front separado em vez de mexer no layout do Kiwi:** as atualizações do Kiwi continuam simples, sem conflitos de template. O QA Hub só chama a API, então não é obra derivada sob a GPL do Kiwi. A UI original fica disponível para a administração.
@@ -227,6 +229,30 @@ Na tela do run, cada caso que falhou ou ficou bloqueado ganha selos calculados p
 Quando o run é **concluído com falhas**, o QA Hub manda para o workflow **QA Hub · Diagnosticar falhas** do n8n (`n8n/qahub-diagnosticar-falhas.workflow.json`) os passos, os comentários (sem as linhas do cronômetro), os bugs, os sinais e a história do card. A IA devolve as falhas agrupadas por causa provável (produto, ambiente, dados, caso desatualizado ou teste instável), com confiança, evidência e a ação sugerida. O resultado fica salvo nas **notas do run** no Kiwi, num bloco próprio (o resto das notas é preservado), e aparece no cartão "Diagnóstico de falhas". O dono do plano ou um admin pode pedir **Analisar de novo**. É uma sugestão: revise antes de agir.
 
 O webhook usa o mesmo n8n e o mesmo segredo da geração de casos (`/webhook/qahub-diagnosticar-falhas`; outro endereço: `N8N_DIAGNOSE_URL`). Importe o workflow como o de casos e **publique**. No dashboard, "Casos que mais falham" marca os instáveis, e o número **Regressões** conta os casos que falham na última build e passavam antes.
+
+### Cards sem caso (cobertura)
+
+Na **Rastreabilidade**, o cartão "Cards sem caso de teste" lista, para cada plano ativo com card do Azure, as **histórias filhas** do card (sem tarefas e bugs) que nenhum caso cita no campo Requirement. Se o card não tem filhos, vale o próprio card. Usa o mesmo `AZURE_DEVOPS_URL`/PAT dos bugs; sem Azure configurado, o cartão não aparece. Se um card não puder ser lido, a página mostra um aviso e o resto continua.
+
+### Relatório do run (PDF e CSV)
+
+Na página do run:
+- **Relatório:** abre uma página sem menu, sempre clara, com o resumo, o diagnóstico da IA (se houver) e a tabela de casos. Use **Imprimir / salvar PDF**.
+- **CSV:** baixa `run-<id>-build-<build>.csv` com separador `;` e acentos certos para o Excel.
+
+### Avisos no Teams
+
+Quando um run é **concluído** e quando o **diagnóstico da IA** fica pronto, o QA Hub manda o evento para o workflow **QA Hub · Avisos no Teams** do n8n (`n8n/qahub-avisos.workflow.json`), que monta um cartão e posta no canal. Se o n8n estiver fora do ar, nada quebra: o erro só aparece no log.
+
+1. No Teams, no canal escolhido: **⋯ → Workflows → "Post to a channel when a webhook request is received"**. Copie a URL gerada. Ela é um segredo: não coloque no repositório.
+2. No n8n: **Import from File** → `n8n/qahub-avisos.workflow.json`. No nó **Webhook (QA Hub)**, escolha a mesma credencial Header Auth dos outros workflows. No nó **Postar no Teams**, cole a URL do passo 1.
+3. **Publique** o workflow.
+4. Confira o `QA_HUB_URL` no `web/.env.production.local`: é ele que vai no botão "Abrir no QA Hub" do cartão. Outro endereço para o webhook: `N8N_NOTIFY_URL`.
+5. Reconstrua o container para o QA Hub enviar os eventos:
+
+```bash
+docker compose up -d --build qa-hub
+```
 
 ### Cronômetro e histórico
 

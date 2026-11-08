@@ -1,6 +1,7 @@
 import "server-only";
 import { azureConfig, getStory } from "./azure";
 import { decodeEntitiesOnce } from "./html";
+import { notify } from "./notify";
 import { failureSignals, SIGNAL_LABEL, type FailureSignal } from "./diagnosis";
 import { latestJob, startJob, type Job } from "./jobs";
 import type { KiwiApi, TestRun } from "./kiwi/types";
@@ -113,6 +114,12 @@ export async function startDiagnosis(kiwi: KiwiApi, run: TestRun, owner: string)
     // Relê as notas na hora de gravar: alguém pode ter mexido nelas durante a análise.
     const [current] = await kiwi.runs({ id: run.id });
     await kiwi.updateRun(run.id, { notes: writeDiagnosis(current?.notes, saved) });
+    notify({
+      type: "diagnostico_pronto",
+      run: { id: run.id, title: run.summary, plan: run.plan__name, build: run.build__name },
+      summary: saved.summary,
+      causes: saved.groups.slice(0, 3).map((g) => ({ title: g.title, cases: g.executions.length, action: g.action })),
+    });
     return saved;
   });
 }

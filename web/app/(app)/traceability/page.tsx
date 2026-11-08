@@ -1,8 +1,9 @@
-import { Bug, ChevronRight, ExternalLink } from "lucide-react";
+import { AlertTriangle, Bug, ChevronRight, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { Filters } from "@/components/filters";
 import { StatusBadge } from "@/components/status";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
+import { coverageGaps } from "@/lib/coverage";
 import { traceabilityData, type Outcome } from "@/lib/metrics";
 import { requirementTemplates, requirementUrl } from "@/lib/requirements";
 import { requireKiwi } from "@/lib/session";
@@ -13,7 +14,9 @@ const ROW_LABEL: Record<Outcome, string> = { passed: "Coberto", failed: "Com fal
 export default async function TraceabilityPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const { kiwi, viewer } = await requireKiwi();
   const sp = await searchParams;
-  const { rows, stats } = await traceabilityData(kiwi, await visibleSet(kiwi, viewer));
+  const vis = await visibleSet(kiwi, viewer);
+  const { rows, cases, stats } = await traceabilityData(kiwi, vis);
+  const coverage = await coverageGaps(kiwi, vis, cases);
   const visible = rows.filter((r) => !sp.outcome || r.outcome === sp.outcome);
   const templates = requirementTemplates();
 
@@ -21,12 +24,52 @@ export default async function TraceabilityPage({ searchParams }: { searchParams:
     <>
       <PageHeader title="Rastreabilidade" description="Requisito (história do Jira/Azure) → casos → último resultado → bugs" />
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Mini label="Requisitos" value={stats.requirements} />
         <Mini label="Cobertos (tudo passou)" value={stats.covered} />
         <Mini label="Com falha ou bloqueio" value={stats.failing} />
+        <Mini label="Não executados" value={stats.notRun} />
         <Mini label="Casos sem requisito" value={stats.orphanCases} />
+        {coverage && <Mini label="Cards sem caso" value={coverage.gaps.length} />}
       </div>
+
+      {coverage && (coverage.gaps.length > 0 || coverage.errors.length > 0) && (
+        <Card className="mb-4">
+          <CardHeader title="Cards sem caso de teste" description="Histórias filhas do card de cada plano ativo (ou o próprio card, quando não tem filhos) que nenhum caso cita." />
+          {coverage.gaps.length > 0 && (
+            <ul className="mt-2 divide-y divide-border">
+              {coverage.gaps.map((g) => {
+                const url = requirementUrl(g.key, templates);
+                return (
+                  <li key={g.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-sm">
+                    <span className="font-semibold tabular">{g.key}</span>
+                    <span className="min-w-0 flex-1">
+                      {g.title}
+                      <span className="ml-2 text-xs text-muted">
+                        {[g.type, g.state].filter(Boolean).join(" · ")}
+                      </span>
+                    </span>
+                    <Link href={`/plans/${g.plan.id}`} className="text-xs text-muted hover:text-fg hover:underline">
+                      plano {g.plan.name}
+                    </Link>
+                    {url && (
+                      <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted hover:text-fg">
+                        abrir no Azure <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {coverage.errors.length > 0 && (
+            <p className="flex items-start gap-2 border-t border-border px-5 py-3 text-xs text-warn">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span>Não consegui ler no Azure: {coverage.errors.join("; ")}</span>
+            </p>
+          )}
+        </Card>
+      )}
 
       <Filters
         filters={[
