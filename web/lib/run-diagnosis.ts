@@ -1,5 +1,6 @@
 import "server-only";
 import { azureConfig, getStory } from "./azure";
+import { decodeEntitiesOnce } from "./html";
 import { failureSignals, SIGNAL_LABEL, type FailureSignal } from "./diagnosis";
 import { latestJob, startJob, type Job } from "./jobs";
 import type { KiwiApi, TestRun } from "./kiwi/types";
@@ -29,13 +30,7 @@ const MAX_TEXT = 1500;
  * o texto original. Desfaz isso antes de ler ou regravar (senão o bloco não é achado,
  * duplica e o resto das notas vai sendo escapado de novo a cada análise).
  */
-export const unescapeKiwi = (text: string | null | undefined) =>
-  (text ?? "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;|&#39;/g, "'")
-    .replace(/&amp;/g, "&");
+export const unescapeKiwi = (text: string | null | undefined) => decodeEntitiesOnce(text ?? "");
 
 export const aiConfigured = () => !!diagnoseUrl() && !!process.env.N8N_WEBHOOK_SECRET;
 

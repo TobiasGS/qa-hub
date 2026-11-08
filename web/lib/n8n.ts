@@ -1,6 +1,7 @@
 import "server-only";
 import { Agent, fetch as undiciFetch } from "undici";
 import { ApiError } from "./api";
+import { decodeEntities } from "./html";
 
 // Geração de casos de teste pela história, num workflow do n8n (n8n/qahub-gerar-casos.workflow.json).
 //   N8N_WEBHOOK_URL     ex.: http://host.docker.internal:5678/webhook/qahub-gerar-casos (no container)
@@ -31,10 +32,10 @@ export function parseGeneratedCases(data: unknown): GeneratedCase[] {
   if (!Array.isArray(raw)) throw new ApiError("O n8n respondeu num formato inesperado (falta a lista \"cases\")", 502);
   const cases = raw
     .map((c: Record<string, unknown>) => ({
-      title: String(c.title ?? "").trim().slice(0, 255),
+      title: decodeEntities(String(c.title ?? "")).trim().slice(0, 255),
       priority: PRIORITIES.find((p) => norm(p) === norm(c.priority)) ?? "média",
       kind: KINDS.find((k) => norm(k) === norm(c.kind)) ?? "positivo",
-      gherkin: String(c.gherkin ?? c.steps ?? "").trim(),
+      gherkin: decodeEntities(String(c.gherkin ?? c.steps ?? "")).trim(),
     }))
     .filter((c) => c.title && c.gherkin)
     .slice(0, 20);

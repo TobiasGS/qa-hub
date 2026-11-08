@@ -1,4 +1,5 @@
 import "server-only";
+import { decodeEntitiesOnce } from "./html";
 
 // Cliente mínimo da REST API do Azure DevOps (nuvem ou Server on-premises),
 // usado para criar o Bug como filho do card do plano.
@@ -84,17 +85,13 @@ export async function getWorkItem(id: number): Promise<WorkItem> {
 /** HTML do Azure (descrição, critérios de aceite) → texto simples, preservando quebras de linha e listas. */
 export function htmlToText(html: string | undefined): string {
   if (!html) return "";
-  return html
-    .replace(/<\s*br\s*\/?>/gi, "\n")
-    .replace(/<\s*li[^>]*>/gi, "\n- ")
-    .replace(/<\/\s*(p|div|li|h\d|tr)\s*>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
+  return decodeEntitiesOnce(
+    html
+      .replace(/<\s*br\s*\/?>/gi, "\n")
+      .replace(/<\s*li[^>]*>/gi, "\n- ")
+      .replace(/<\/\s*(p|div|li|h\d|tr)\s*>/gi, "\n")
+      .replace(/<[^>]+>/g, ""),
+  )
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

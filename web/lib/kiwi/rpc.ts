@@ -1,6 +1,12 @@
 import "server-only";
 import { Agent, fetch as undiciFetch } from "undici";
-import type { KiwiApi, Query, TestExecution } from "./types";
+import { decodeEntities } from "../html";
+import type { KiwiApi, Query, TestCase, TestExecution, TestPlan } from "./types";
+
+// A API devolve o texto livre com HTML escapado (`&quot;`, `&gt;`): sem isso as aspas
+// aparecem como &quot; e, ao salvar pelo formulário, o texto escapado seria regravado.
+const cleanCase = (c: TestCase): TestCase => ({ ...c, summary: decodeEntities(c.summary), ...(c.text != null ? { text: decodeEntities(c.text) } : {}) });
+const cleanPlan = (p: TestPlan): TestPlan => ({ ...p, name: decodeEntities(p.name), ...(p.text != null ? { text: decodeEntities(p.text) } : {}) });
 
 export class KiwiError extends Error {
   constructor(
@@ -87,9 +93,9 @@ export function realKiwi(sessionId: string): KiwiApi {
     priorities: () => filter("Priority.filter"),
     caseStatuses: () => filter("TestCaseStatus.filter"),
     users: (q) => filter("User.filter", { is_active: true, ...q }),
-    plans: (q) => filter("TestPlan.filter", q),
+    plans: async (q) => (await filter<TestPlan>("TestPlan.filter", q)).map(cleanPlan),
     runs: (q) => filter("TestRun.filter", q),
-    cases: (q) => filter("TestCase.filter", q),
+    cases: async (q) => (await filter<TestCase>("TestCase.filter", q)).map(cleanCase),
     executions: (q) => filter("TestExecution.filter", q),
     statuses: () => filter("TestExecutionStatus.filter"),
     links: (q) => filter("TestExecution.get_links", q),
@@ -119,19 +125,19 @@ export function realKiwi(sessionId: string): KiwiApi {
 
     createPlan: async (values) => {
       const r = await call<{ id: number }>("TestPlan.create", { ...values, is_active: true });
-      return one("TestPlan.filter", r.id);
+      return cleanPlan(await one<TestPlan>("TestPlan.filter", r.id));
     },
     updatePlan: async (id, values) => {
       await call("TestPlan.update", id, values);
-      return one("TestPlan.filter", id);
+      return cleanPlan(await one<TestPlan>("TestPlan.filter", id));
     },
     createCase: async (values) => {
       const r = await call<{ id: number }>("TestCase.create", values);
-      return one("TestCase.filter", r.id);
+      return cleanCase(await one<TestCase>("TestCase.filter", r.id));
     },
     updateCase: async (id, values) => {
       await call("TestCase.update", id, values);
-      return one("TestCase.filter", id);
+      return cleanCase(await one<TestCase>("TestCase.filter", id));
     },
     addCaseToPlan: async (planId, caseId) => {
       await call("TestPlan.add_case", planId, caseId);
