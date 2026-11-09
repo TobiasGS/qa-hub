@@ -35,7 +35,7 @@ export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, _req, { id
   if (!run) throw new ApiError("Run não encontrado", 404);
   const [plan] = await kiwi.plans({ id: run.plan });
   if (!plan || !canEditPlan(viewer, plan)) throw new ApiError("Só quem criou o plano (ou um admin) pode pedir uma nova análise", 403);
-  if (!aiConfigured()) throw new ApiError("IA não configurada: defina N8N_WEBHOOK_URL e N8N_WEBHOOK_SECRET.");
+  if (!aiConfigured()) throw new ApiError("IA não configurada: defina ANTHROPIC_API_KEY (Claude) ou N8N_WEBHOOK_URL e N8N_WEBHOOK_SECRET (n8n).");
   const job = await startDiagnosis(kiwi, run, viewer.username);
   if (!job) throw new ApiError("Este run não tem falhas para analisar.");
   return { job: jobView(job) };

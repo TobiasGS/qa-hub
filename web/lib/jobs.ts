@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sameUser } from "./visibility";
 
 // Trabalhos de IA em segundo plano (gerar casos, diagnosticar falhas). A IA pode levar
-// minutos (o Google às vezes responde 503 e o n8n tenta de novo), mais do que uma
+// minutos (respostas longas, novas tentativas quando a API está sobrecarregada), mais do que uma
 // requisição aguenta aberta: o Cloudflare corta em ~100 s. A rota inicia o job e a
 // tela consulta até terminar. Fica na memória do processo (um container só); some se
 // o QA Hub reiniciar.

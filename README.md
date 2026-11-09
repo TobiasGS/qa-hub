@@ -14,7 +14,7 @@ navegador ──► QA Hub (Next.js, qa.seu-dominio.com)
 **O que tem:**
 - **Dashboard:** filtro por projeto, taxa de sucesso (por build ou por semana), tempo médio por caso, tabela "Por projeto", progresso dos runs, casos que mais falham e bugs recentes.
 - **Planos:** organizados em seções por **projeto** (com filtro); criar com Projeto (ou "+ Projeto"), Tipo Manual/Automatizado e card do épico/feature; editar, arquivar e restaurar. Com card do Azure, o plano ganha uma **tarefa "Plano de Teste"** no card, com o estado acompanhando os runs.
-- **Casos:** criar, editar, desativar e remover do plano, cada um ligado a um ou mais cards do Jira/Azure (`jira-101, azure-55`); **Gerar casos da história** propõe os casos (Dado/Quando/Então) a partir do card do Azure, via n8n.
+- **Casos:** criar, editar, desativar e remover do plano, cada um ligado a um ou mais cards do Jira/Azure (`jira-101, azure-55`); **Gerar casos da história** propõe os cenários (Dado/Quando/Então) a partir do card do Azure, via n8n; com a API do Claude configurada, também analisa a história (pontos de atenção, testes não funcionais, impacto).
 - **Runs:**
   - criar a partir do plano: a build já vem preenchida com a seguinte à do último run (`1` → `2`, `1.0.0` → `1.0.1`), editável; o título é automático (`<plano> — build <n>`); escolha os casos e quem testa cada um;
   - **Re-testar falhas**, que cria um run só com o que falhou ou ficou bloqueado;
@@ -28,7 +28,7 @@ navegador ──► QA Hub (Next.js, qa.seu-dominio.com)
   - botão **Abrir bug**: com card do Azure no plano, o bug nasce no Azure DevOps como **filho do card**, na mesma sprint.
 - **Matriz de rastreabilidade:** card (história do Jira/Azure) → casos → último resultado → bugs, com a lista de **cards sem caso** (histórias filhas do card de cada plano que ainda não têm caso de teste).
 - **Relatório do run:** página pronta para imprimir ou salvar em **PDF** e download em **CSV** para o Excel.
-- **Avisos no Teams:** run concluído e diagnóstico da IA pronto viram um cartão no canal, via n8n.
+- **Avisos no Teams:** run concluído e diagnóstico da IA pronto viram um cartão no canal.
 - **Diagnóstico de falhas:** cada falha do run ganha selos (Regressão, Recorrente, Instável, Nova, Sem bug) e, quando o run termina com falhas, a IA agrupa as falhas por causa provável e sugere o que fazer. O run em andamento atualiza sozinho ("ao vivo").
 
 **Por que um front separado em vez de mexer no layout do Kiwi:** as atualizações do Kiwi continuam simples, sem conflitos de template. O QA Hub só chama a API, então não é obra derivada sob a GPL do Kiwi. A UI original fica disponível para a administração.
@@ -202,17 +202,39 @@ Os nomes vêm do processo do Azure e podem ser trocados com `AZURE_STATE_TESTING
 
 **Run concluído:** quando o último caso pendente recebe resultado, o run ganha data de conclusão (`stop_date`) e sai de "Em andamento". Se um caso voltar a pendente, o run reabre sozinho.
 
-### Gerar casos da história (n8n + IA)
+### IA (API do Claude)
 
-Na página de um plano com card do Azure, o botão **Gerar casos da história** lê o card (título, descrição e critérios de aceite) e manda para um workflow do **n8n**, que usa a IA configurada nele. Os casos voltam no formato **Dado/Quando/Então**, aparecem num diálogo para revisar (desmarcar, editar título, prioridade e passos) e só então são criados no plano, já ligados ao `azure-N`. Casos que o plano já tem são enviados para a IA não repetir.
+As três funções de IA (gerar casos, diagnosticar falhas e gerar Playwright) funcionam de dois jeitos:
+- **Com `ANTHROPIC_API_KEY`:** o QA Hub chama a **API do Claude** direto do servidor, com resposta estruturada (o formato é garantido pela API). A geração de casos ganha a análise da história e cenários mais completos.
+- **Sem a chave:** usa os workflows do **n8n** (com Gemini), como antes. Veja "IA pelo n8n" abaixo.
 
-**Para ligar (uma vez):**
-1. Abra o n8n (`http://localhost:5678`) → **Import from File** → `n8n/qahub-gerar-casos.workflow.json`.
+Com os dois configurados, vale o Claude. Sem nenhum, os botões de IA avisam "IA não configurada" e o resto do Hub funciona normalmente.
+
+**Para ligar o Claude:** crie uma chave no **Console da Anthropic** (conta da empresa) e coloque em `ANTHROPIC_API_KEY` no `web/.env.production.local` (e no `.env.local`, em dev). O modelo padrão é o `claude-opus-5-5`; outro modelo: `ANTHROPIC_MODEL`.
+
+**Custo do Claude:** cobrado por uso na conta da API (a assinatura do claude.ai não cobre). Uma geração de casos de uma história fica em torno de US$ 0,10 com o Opus 5.5; diagnóstico e Playwright custam parecido ou menos. As instruções fixas ficam em cache entre chamadas. O log do servidor mostra os tokens de cada chamada (`[ia] ...`).
+
+### IA pelo n8n
+
+Enquanto não houver `ANTHROPIC_API_KEY`, o QA Hub manda os pedidos para três workflows do **n8n**: `n8n/qahub-gerar-casos.workflow.json`, `n8n/qahub-diagnosticar-falhas.workflow.json` e `n8n/qahub-gerar-playwright.workflow.json`. Nesse modo, a geração de casos traz só os cenários (sem a análise da história).
+
+**Para ligar (uma vez), para cada workflow:**
+1. Abra o n8n (`http://localhost:5678`) → **Import from File** → o arquivo do workflow (`n8n/qahub-*.workflow.json`).
 2. No nó **Webhook (QA Hub)**, crie uma credencial **Header Auth** com Name `X-QAHub-Secret` e Value igual ao `N8N_WEBHOOK_SECRET` do `web/.env.production.local` (e do `.env.local`, em dev).
 3. Nos nós **Google Gemini Chat Model** e **Google Gemini (reserva)**, escolha a sua credencial do Gemini. O principal é `models/gemini-3.8-flash`; se ele falhar (o Google às vezes responde 503 por excesso de demanda), o nó tenta 3 vezes e usa o reserva, `models/gemini-3.5-flash`. Dá para trocar os modelos ou o provedor de IA.
 4. **Publique** o workflow (botão *Publish*). Sem isso, o webhook responde 404 e o QA Hub avisa. Cada alteração no workflow só vale depois de publicar de novo.
 
 `N8N_WEBHOOK_URL` aponta para `http://localhost:5678/webhook/qahub-gerar-casos` em dev e para `http://host.docker.internal:5678/webhook/qahub-gerar-casos` no container (o compose já mapeia `host.docker.internal`). O iniciador sobe o n8n junto. Se `n8n.seu-dominio.com` também estiver publicado no Tunnel, proteja-o com o Cloudflare Access: o QA Hub não precisa dele, porque chama o n8n por dentro do PC.
+
+Os workflows de diagnóstico e Playwright usam o mesmo n8n e o mesmo segredo (`/webhook/qahub-diagnosticar-falhas` e `/webhook/qahub-gerar-playwright`; outros endereços: `N8N_DIAGNOSE_URL` e `N8N_PLAYWRIGHT_URL`).
+
+### Gerar casos da história
+
+Na página de um plano com card do Azure, o botão **Gerar casos da história** lê o card (título, descrição e critérios de aceite) e pede à IA. Com o Claude, usando as instruções do assistente de QA da empresa, vêm:
+- **Análise da história:** resumo, pontos de atenção (incongruências, zonas cinzentas, ambiguidades, fluxos incompletos, critérios de aceite ausentes, sugestões), testes não funcionais sugeridos (segurança, performance, usabilidade) e impacto. O botão **Enviar análise ao card** publica isso como comentário no card do Azure, para o PO.
+- **Cenários** nos fluxos principal, alternativo, exceção e borda, cada um com resumo, pré-condições, dados de teste, Dado/Quando/Então, resultado esperado e impacto.
+
+Pelo n8n, vêm só os cenários (Dado/Quando/Então). Tudo aparece num diálogo para revisar (desmarcar, editar título, prioridade e texto) e só então os casos são criados no plano, já ligados ao `azure-N`. Casos que o plano já tem são enviados para a IA não repetir.
 
 ### Diagnóstico de falhas
 
@@ -226,9 +248,9 @@ Na tela do run, cada caso que falhou ou ficou bloqueado ganha selos calculados p
 | **Nova** | primeira execução do caso |
 | **Sem bug** | falhou e ainda não tem bug vinculado |
 
-Quando o run é **concluído com falhas**, o QA Hub manda para o workflow **QA Hub · Diagnosticar falhas** do n8n (`n8n/qahub-diagnosticar-falhas.workflow.json`) os passos, os comentários (sem as linhas do cronômetro), os bugs, os sinais e a história do card. A IA devolve as falhas agrupadas por causa provável (produto, ambiente, dados, caso desatualizado ou teste instável), com confiança, evidência e a ação sugerida. O resultado fica salvo nas **notas do run** no Kiwi, num bloco próprio (o resto das notas é preservado), e aparece no cartão "Diagnóstico de falhas". O dono do plano ou um admin pode pedir **Analisar de novo**. É uma sugestão: revise antes de agir.
+Quando o run é **concluído com falhas**, o QA Hub manda para a IA os passos, os comentários (sem as linhas do cronômetro), os bugs, os sinais e a história do card. A IA devolve as falhas agrupadas por causa provável (produto, ambiente, dados, caso desatualizado ou teste instável), com confiança, evidência e a ação sugerida. O resultado fica salvo nas **notas do run** no Kiwi, num bloco próprio (o resto das notas é preservado), e aparece no cartão "Diagnóstico de falhas". O dono do plano ou um admin pode pedir **Analisar de novo**. É uma sugestão: revise antes de agir.
 
-O webhook usa o mesmo n8n e o mesmo segredo da geração de casos (`/webhook/qahub-diagnosticar-falhas`; outro endereço: `N8N_DIAGNOSE_URL`). Importe o workflow como o de casos e **publique**. No dashboard, "Casos que mais falham" marca os instáveis, e o número **Regressões** conta os casos que falham na última build e passavam antes.
+No dashboard, "Casos que mais falham" marca os instáveis, e o número **Regressões** conta os casos que falham na última build e passavam antes.
 
 ### Cards sem caso (cobertura)
 
@@ -242,13 +264,12 @@ Na página do run:
 
 ### Avisos no Teams
 
-Quando um run é **concluído** e quando o **diagnóstico da IA** fica pronto, o QA Hub manda o evento para o workflow **QA Hub · Avisos no Teams** do n8n (`n8n/qahub-avisos.workflow.json`), que monta um cartão e posta no canal. Se o n8n estiver fora do ar, nada quebra: o erro só aparece no log.
+Quando um run é **concluído** e quando o **diagnóstico da IA** fica pronto, o QA Hub posta um cartão no canal do Teams. Se o Teams não responder, nada quebra: o erro só aparece no log.
 
 1. No Teams, no canal escolhido: **⋯ → Workflows → "Post to a channel when a webhook request is received"**. Copie a URL gerada. Ela é um segredo: não coloque no repositório.
-2. No n8n: **Import from File** → `n8n/qahub-avisos.workflow.json`. No nó **Webhook (QA Hub)**, escolha a mesma credencial Header Auth dos outros workflows. No nó **Postar no Teams**, cole a URL do passo 1.
-3. **Publique** o workflow.
-4. Confira o `QA_HUB_URL` no `web/.env.production.local`: é ele que vai no botão "Abrir no QA Hub" do cartão. Outro endereço para o webhook: `N8N_NOTIFY_URL`.
-5. Reconstrua o container para o QA Hub enviar os eventos:
+2. Cole a URL em `TEAMS_WEBHOOK_URL` no `web/.env.production.local`.
+3. Confira o `QA_HUB_URL` no mesmo arquivo: é ele que vai no botão "Abrir no QA Hub" do cartão.
+4. Reconstrua o container para valer:
 
 ```bash
 docker compose up -d --build qa-hub
@@ -314,7 +335,7 @@ O iniciador (`scripts\iniciar.ps1`) faz e confere cinco coisas:
 1. **Docker:** abre o Docker Desktop se ele estiver fechado.
 2. **Containers:** sobe o banco, o Kiwi e o QA Hub e espera os três ficarem saudáveis.
 3. **Tunnel:** confere o serviço `cloudflared` do Windows (ele já inicia sozinho com o PC).
-4. **n8n:** se a porta 5678 não responde, inicia o `n8n` instalado pelo npm, em segundo plano (log em `~/.n8n/qahub-iniciar.log`), e espera ele ficar pronto. Só o "Gerar casos da história" depende dele.
+4. **n8n:** se a porta 5678 não responde, inicia o `n8n` instalado pelo npm, em segundo plano (log em `~/.n8n/qahub-iniciar.log`), e espera ele ficar pronto. As funções de IA dependem dele enquanto não houver `ANTHROPIC_API_KEY`.
 5. **Acesso:** testa o QA Hub no próprio PC e o endereço público. O endereço é lido de `QA_HUB_URL` no `web/.env.production.local`.
 
 Se algo der errado, a janela mostra `[!!]` com o que fazer. Com o PC desligado ou o Docker fechado, o site fica fora do ar.
@@ -419,7 +440,7 @@ A senha fica **criptografada** (AES-256-GCM, com chave de `AUTOMATION_SECRET` ou
 - **Ao vivo:** uma fixture manda, a cada segundo, um print JPEG do navegador e o passo atual (`passo("Quando …")`) para `POST /api/automation/live`. Na tela do run aparece o cartão **Automação ao vivo**, com a imagem, o caso e o passo; o caso em execução fica "Em execução" na tabela. Só o último quadro é guardado, em memória.
 - **Fim:** nas falhas, o print e o vídeo do Playwright são anexados como evidência da execução (`PUT /api/automation/evidence`).
 
-**Gerar o teste a partir do caso:** no menu ⋯ de um caso, **Gerar teste Playwright**. A IA (workflow `n8n/qahub-gerar-playwright.workflow.json`, que precisa ser importado e publicado) escreve o `*.spec.ts` a partir do Dado/Quando/Então, já com o `[TC-id]` no título, usando `getByRole`/`getByLabel` e marcando com `TODO` o que é palpite. Dicas de telas e seletores podem ir numa seção `## Automação` na descrição do plano. No diálogo dá para copiar, baixar e marcar o caso como automatizado.
+**Gerar o teste a partir do caso:** no menu ⋯ de um caso, **Gerar teste Playwright**. A IA (Claude ou o workflow `n8n/qahub-gerar-playwright.workflow.json`) escreve o `*.spec.ts` a partir do Dado/Quando/Então, já com o `[TC-id]` no título, usando `getByRole`/`getByLabel` e marcando com `TODO` o que é palpite. Dicas de telas e seletores podem ir numa seção `## Automação` na descrição do plano. No diálogo dá para copiar, baixar e marcar o caso como automatizado.
 
 ## 5b. Cypress no Azure Pipelines (plugin JUnit do Kiwi)
 
@@ -443,7 +464,7 @@ O plugin identifica cada caso pelo título (`classname.name`) e cria o caso no K
 
 ## Custos
 
-Tudo aqui é gratuito: Kiwi (GPLv2), MariaDB, Cloudflare Tunnel, Workers e Access (até 50 usuários) e o Azure Pipelines (1.800 min/mês em projetos privados). O **Azure Test Plans**, que seria a alternativa nativa do Azure DevOps, é pago (licença Basic + Test Plans por usuário).
+Tudo aqui é gratuito: Kiwi (GPLv2), MariaDB, Cloudflare Tunnel, Workers e Access (até 50 usuários) e o Azure Pipelines (1.800 min/mês em projetos privados). A exceção é a IA: a API do Claude é cobrada por uso (veja "IA (API do Claude)"). O **Azure Test Plans**, que seria a alternativa nativa do Azure DevOps, é pago (licença Basic + Test Plans por usuário).
 
 ## Limitações conhecidas
 

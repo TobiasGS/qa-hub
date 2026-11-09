@@ -126,7 +126,7 @@ export function RunDiagnosis({
       )}
       {!d && !running && !failed && !error && (
         <p className="mt-4 text-sm text-muted">
-          {configured ? "Ainda sem análise. Ela roda sozinha quando o run é concluído com falhas." : "IA não configurada (n8n): os sinais na tabela abaixo continuam valendo."}
+          {configured ? "Ainda sem análise. Ela roda sozinha quando o run é concluído com falhas." : "IA não configurada (Claude ou n8n): os sinais na tabela abaixo continuam valendo."}
         </p>
       )}
 

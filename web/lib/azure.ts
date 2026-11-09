@@ -30,13 +30,13 @@ export function azureConfig() {
 
 export const workItemHtmlUrl = (base: string, id: number) => `${base}/_workitems/edit/${id}`;
 
-async function call<T>(path: string, init: { method?: string; body?: unknown; contentType?: string } = {}): Promise<T> {
+async function call<T>(path: string, init: { method?: string; body?: unknown; contentType?: string; apiVersion?: string } = {}): Promise<T> {
   const cfg = azureConfig();
   if (!cfg) throw new AzureError("Azure DevOps não configurado: defina AZURE_DEVOPS_URL e AZURE_DEVOPS_PAT");
   const sep = path.includes("?") ? "&" : "?";
   let res: Response;
   try {
-    res = await fetch(`${cfg.base}/_apis/${path}${sep}api-version=${cfg.apiVersion}`, {
+    res = await fetch(`${cfg.base}/_apis/${path}${sep}api-version=${init.apiVersion ?? cfg.apiVersion}`, {
       method: init.method ?? "GET",
       cache: "no-store",
       headers: {
@@ -123,6 +123,16 @@ export async function getCardWithChildren(id: number): Promise<{ card: CardBrief
     card: brief(w),
     children: children.filter((c) => !skip.has(c.type.toLowerCase()) && c.state !== "Removed"),
   };
+}
+
+/**
+ * Comentário (HTML) num work item. A API de comentários ainda é "preview" no Azure DevOps
+ * (6.0-preview.3 no Server 2020, 7.x-preview no cloud): a versão vem da configurada + "-preview.3".
+ */
+export async function addWorkItemComment(id: number, html: string): Promise<{ id: number }> {
+  const cfg = azureConfig();
+  const base = cfg?.apiVersion.replace(/-preview.*$/, "") ?? "6.0";
+  return call<{ id: number }>(`wit/workItems/${id}/comments`, { method: "POST", body: { text: html }, apiVersion: `${base}-preview.3` });
 }
 
 /** HTML do Azure (descrição, critérios de aceite) → texto simples, preservando quebras de linha e listas. */

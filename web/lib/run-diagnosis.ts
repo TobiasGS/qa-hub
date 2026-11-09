@@ -5,11 +5,13 @@ import { notify } from "./notify";
 import { failureSignals, SIGNAL_LABEL, type FailureSignal } from "./diagnosis";
 import { latestJob, startJob, type Job } from "./jobs";
 import type { KiwiApi, TestRun } from "./kiwi/types";
-import { diagnoseUrl, diagnoseViaN8n, type Diagnosis } from "./n8n";
+import { aiConfigured } from "./ai/client";
+import { diagnose } from "./ai/diagnosis";
+import type { Diagnosis } from "./ai/parse";
 import { planCardId } from "./plan-task";
 import { isTimerComment } from "./timer";
 
-// Diagnóstico das falhas de um run pela IA (n8n), guardado no campo `notes` do run
+// Diagnóstico das falhas de um run pela IA (API do Claude), guardado no campo `notes` do run
 // no Kiwi, num bloco marcado: uma nova análise troca só esse bloco e preserva o
 // que alguém escreveu à mão nas notas.
 
@@ -33,7 +35,7 @@ const MAX_TEXT = 1500;
  */
 export const unescapeKiwi = (text: string | null | undefined) => decodeEntitiesOnce(text ?? "");
 
-export const aiConfigured = () => !!diagnoseUrl() && !!process.env.N8N_WEBHOOK_SECRET;
+export { aiConfigured };
 
 export function readDiagnosis(notes: string | null | undefined): SavedDiagnosis | null {
   const m = unescapeKiwi(notes).match(BLOCK);
@@ -109,7 +111,7 @@ export async function startDiagnosis(kiwi: KiwiApi, run: TestRun, owner: string)
   const signals = await failureSignals(kiwi, run);
   if (!signals.length) return null;
   return startJob({ kind: "diagnosis", scope: run.id, owner, meta: null }, async () => {
-    const diagnosis = await diagnoseViaN8n(await payloadFor(kiwi, run, signals), signals.map((s) => s.executionId));
+    const diagnosis = await diagnose(await payloadFor(kiwi, run, signals), signals.map((s) => s.executionId));
     const saved: SavedDiagnosis = { ...diagnosis, at: new Date().toISOString(), by: owner };
     // Relê as notas na hora de gravar: alguém pode ter mexido nelas durante a análise.
     const [current] = await kiwi.runs({ id: run.id });

@@ -1,7 +1,8 @@
 import { ApiError, apiRoute, readJson, toId } from "@/lib/api";
 import { getAutomation } from "@/lib/automation-config";
 import { findJob, startJob, type Job } from "@/lib/jobs";
-import { generatePlaywrightViaN8n, type GeneratedSpec } from "@/lib/n8n";
+import { generatePlaywright } from "@/lib/ai/playwright";
+import type { GeneratedSpec } from "@/lib/ai/parse";
 import { requireCaseEditable } from "@/lib/visibility";
 
 type SpecJob = Job<GeneratedSpec, { caseId: number; folder: string | null }>;
@@ -19,7 +20,7 @@ const view = (job: SpecJob) => ({
 const hintsOf = (text: string | null | undefined) => (text ?? "").match(/##\s*Automa[çc][ãa]o\s*\n([\s\S]*?)(?:\n##\s|$)/i)?.[1]?.trim().slice(0, 3000) ?? "";
 
 /**
- * "Gerar teste Playwright": a IA (n8n) escreve um *.spec.ts a partir dos passos
+ * "Gerar teste Playwright": a IA (API do Claude) escreve um *.spec.ts a partir dos passos
  * Dado/Quando/Então do caso, com o TC-id no título. Corpo: { plan }. Nada é salvo:
  * a pessoa copia ou baixa o arquivo para o repositório de testes.
  */
@@ -32,10 +33,9 @@ export const POST = apiRoute<{ id: string }>(async ({ kiwi, viewer }, req, { id 
   const auto = plan ? await getAutomation(plan.product) : null;
   const system = auto ? `Sistema em teste: ${auto.baseUrl} (o login já está feito pela sessão salva). Arquivo em tests/${auto.folder}/. Importe test, expect e passo de "../fixtures" e use passo("Dado …") em cada passo do Gherkin.` : "";
   const job = startJob({ kind: "playwright", scope: testCase.id, owner: viewer.username, meta: { caseId: testCase.id, folder: auto?.folder ?? null } }, () =>
-    generatePlaywrightViaN8n({
+    generatePlaywright({
       case: { id: testCase.id, title: testCase.summary, steps: (testCase.text ?? "").slice(0, 6000), requirement: testCase.requirement },
       plan: { id: plan?.id ?? 0, name: plan?.name ?? "", hints: [system, hintsOf(plan?.text)].filter(Boolean).join("\n\n") },
-      language: "pt-BR",
     }),
   );
   return view(job);
